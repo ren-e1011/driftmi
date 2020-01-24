@@ -7,21 +7,7 @@ Created on Wed Jan 22 11:13:16 2020
 """
 
 
-'''
-Parameters
-----------
-image : ndarray
-    Input image data. Will be converted to float.
-mode : str
-    One of the following strings, selecting the type of noise to add:
 
-    'gauss'     Gaussian-distributed additive noise.
-    'poisson'   Poisson-distributed noise generated from the data.
-    's&p'       Replaces random pixels with 0 or 1.
-    'speckle'   Multiplicative noise using out = image + n*image,where
-                n is uniform noise with specified mean & variance.
-
-'''
 
 import numpy as np
 import os
@@ -33,6 +19,23 @@ import matplotlib.pyplot as plt
 
 
 def noisy(noise_typ,image, rotation = 45, swirl_rate = 5):
+    
+    #Parameters
+    #----------
+    #image : ndarray
+    #Input image data. Will be converted to float.
+    #mode : str
+    #One of the following strings, selecting the type of noise to add:
+    #
+    #'gauss'     Gaussian-distributed additive noise.
+    #'s&p'       Replaces random pixels with 0 or 1.
+    #'speckle'   Multiplicative noise using out = image + n*image,where
+    #        n is uniform noise with specified mean & variance.
+    #       
+    #'rotate'    rotates the image by a given angle
+    #'seg-fel'   operates a felzenszwalb segmentation on the image
+    #'seg -swirl'operates a swirl segmentation on the image.
+    
    if noise_typ == "gauss":
       row,col, ch = image.shape
       mean = 0
