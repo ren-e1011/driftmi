@@ -14,7 +14,7 @@ import os
 
 import pyprind
 os.chdir('/home/michael/Documents/Scxript/')
-from networks import statistical_estimator_big, statistical_estimator_small
+from networks import statistical_estimator_big, statistical_estimator_small, statistical_estimator_DCGAN
 
 
 mnist_data_train = torchvision.datasets.MNIST('home/michael/Documents/MNIST data', train = True, transform=torchvision.transforms.Compose(
@@ -41,16 +41,16 @@ for i in range(6):
   plt.yticks([])
 fig
 '''
-net = statistical_estimator_small(input_size = 1, classifier = True)
+net = statistical_estimator_DCGAN(input_size = 2, output_size = 10)
 print('defined network')
 optimizer = optim.Adam(net.parameters())
 loss_func = nn.CrossEntropyLoss()
-epochs = 2
+epochs = 1
 bar = pyprind.ProgBar(len(train_loader)*epochs, monitor = True)
 for i in range(epochs):
     for batch_idx, (data,target) in enumerate(train_loader):
         optimizer.zero_grad()
-        output = net(data)
+        output = net(data, data)
         loss = loss_func(output, target)
         loss.backward()
         optimizer.step()
@@ -62,7 +62,7 @@ correct = 0
 test_losses = []
 with torch.no_grad():
     for data, target in test_loader:
-        output = net(data)
+        output = net(data,data)
         test_loss += loss_func(output, target).item()
         pred = output.data.max(1, keepdim = True)[1]
         correct += pred.eq(target.data.view_as(pred)).sum()

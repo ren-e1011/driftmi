@@ -68,7 +68,7 @@ class statistical_estimator_small(nn.Module):
         return x
     
 class statistical_estimator_DCGAN(nn.Module):
-    def __init__(self, input_size = 1, output_size = 10):
+    def __init__(self, input_size = 2, output_size = 1):
         super().__init__()
         # Define the networks steps:
         self.conv1 = nn.Conv2d(input_size, 16, 5, stride = 2, padding = 2)
@@ -77,11 +77,12 @@ class statistical_estimator_DCGAN(nn.Module):
         self.conv3 = nn.Conv2d(32, 64, 5, stride = 2, padding = 2)
         self.fc = nn.Linear(1024,output_size)
     
-    def forward(self, x):
+    def forward(self, x1,x2):
+        x = torch.cat((x1.float().unsqueeze(1),x2.float().unsqueeze(1)),1)
         #x = torch.from_numpy(x)
-        x = self.pool1(self.elu(self.conv1(x)))
-        x = self.pool2(self.elu(self.conv2(x)))
-        x = self.pool3(self.elu(self.conv3(x)))
+        x = self.elu(self.conv1(x))
+        x = self.elu(self.conv2(x))
+        x = self.elu(self.conv3(x))
         x = x.view(x.size(0), 64*4*4)
         x = self.fc(x)
         #x = self.softmax(x)
