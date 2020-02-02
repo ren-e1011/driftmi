@@ -1,101 +1,83 @@
+
+
+
 import torch
 import torch.optim as optim
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
-import torchvision
+
 import matplotlib.pyplot as plt
-import os
 import numpy as np
 
-import pyprind
+import pandas as pd
 
-class MNIST_for_MINE(Dataset):
-    def __init__(self, train = False, transform = None):
-        
-        self.transform = transform
-        
-        for i in range(10):
-            main_dataset = torchvision.datasets.MNIST('home/michael/Documents/MNIST data', 
-                    train = train,download = True)
-            sec_dataset = torchvision.datasets.MNIST('home/michael/Documents/MNIST data',
-                    train = train, download = True)
-                    
-            
-            idx = main_dataset.targets==i
-            main_dataset.targets = main_dataset.targets[idx]
-            main_dataset.data = main_dataset.data[idx]
-            if i == 0:
-                self.main_data = main_dataset.data
-                self.main_targets = main_dataset.targets
-            else:
-                self.main_data = torch.utils.data.ConcatDataset([self.main_data, main_dataset.data])
-                self.main_targets = torch.utils.data.ConcatDataset([self.main_targets, main_dataset.targets])
-              
-            idx = np.random.randint(0,len(sec_dataset),len(main_dataset))
-            marginal_temp = torchvision.datasets.MNIST('home/michael/Documents/MNIST data', train = False, download = True)
-            marginal_temp.targets = sec_dataset.targets[idx]
-            marginal_temp.data = sec_dataset.data[idx]
-            if i == 0:
-                self.marginal_data = marginal_temp.data
-                self.marginal_targets = marginal_temp.targets
-            else:
-                self.marginal_data = torch.utils.data.ConcatDataset([self.marginal_data, marginal_temp.data])
-                self.marginal_targets = torch.utils.data.ConcatDataset([self.marginal_targets, marginal_temp.targets])
-            
-            
-            idx = sec_dataset.targets==i
-            sec_dataset.targets = sec_dataset.targets[idx]
-            sec_dataset.data = sec_dataset.data[idx]
-            idx = torch.randperm(len(sec_dataset))
-            sec_dataset.targets = sec_dataset.targets[idx]
-            sec_dataset.data = sec_dataset.data[idx]
-            if i == 0:
-                self.sec_data = sec_dataset.data
-                self.sec_targets = sec_dataset.targets
-            else:
-                self.sec_data = torch.utils.data.ConcatDataset([self.sec_data, sec_dataset.data])
-                self.sec_targets = torch.utils.data.ConcatDataset([self.sec_targets, sec_dataset.targets])
-            
-                
-           
-                   
-    
-    def __len__(self):
-        return len(self.main_data)
-    
-    def __getitem__(self, idx):
-        '''
-        args idx (int) :  index
-        
-        returns: tuple(main_data, main_target, sec_joint, sec_joint_target, sec_matginal, sec_marginal_target)
-        '''
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-            
-        main_data = self.main_data[idx]
-        main_targets = self.main_targets[idx]
-        
-        sec_joint_data = self.sec_data[idx]
-        sec_joint_targets = self.sec_targets[idx]
-        
-        sec_marginal_data = self.marginal_data[idx]
-        sec_marginal_targets = self.marginal_targets[idx]
-            
-        
-        if self.transform is not None:
-            main_data = self.transform(main_data)
-            sec_joint_data = self.transform(sec_joint_data)
-            sec_marginal_data = self.transform(sec_marginal_data)
-            
-        
+import MINE
+import networks
 
-        return main_data, main_targets, sec_joint_data, sec_joint_targets, sec_marginal_data, sec_marginal_targets
-    
-    def targets(self):
-        return self.main_targets, self.sec_targets, self.marginal_targets
-    
-    def data(self):
-        return self.main_data, self.sec_data, self.marginal_data
-    
-    
+trial = MINE.MINE(train = True, batch = 1000)
+
+results_SGD = []
+print('Running SGD trial')
+batch_size = [1000,4000,8000]
+lr_list = [5e-4,1e-3,3e-3]
+count = 1
+fig = plt.figure(figsize=[12,20])
+fig.subplots_adjust(hspace=1, wspace=0.4)
+for batch_s in batch_size:
+    trial = MINE.MINE(train = True, batch = batch_s)
+    for lr in lr_list:
+        for i in range(2):
+            ax = fig.add_subplot(3, 1, count)
+            trial.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
+            trial.mine_net_optim = optim.SGD(trial.net.parameters(), lr = lr)
+            
+            check_trial = trial.train(epochs = 80)    
+            results_SGD.append(check_trial)
+            torch.save(trial.net.state_dict, '/home/michael/Documents/Scxript/Syclop-MINE-master/trained networks/net_SGD_{0}_{1}'.format(batch_s,int(lr*10000)+i))
+            print(check_trial[-1])
+            ax = fig.add_subplot(3,1,count)
+            ax.plot(check_trial[:],label = 'lr={}'.format(lr) )
+            
+    plt.legend(loc=0, frameon=False)
+    plt.title('Mutual Information Neural Estimator MNIST - MNIST batch_size={}'.format(batch_s))
+    plt.xlabel('Epochs')
+    plt.ylabel('bits')
+    count+=1
+
+results_SGD = pd.DataFrame(results_SGD)
+results_SGD.to_pickle('results_SGD')
+results_SGD.to_csv('results_SGD.csv')
+
+trial = MINE.MINE(train = True, batch = 1000)
+
+results_Adam = []
+print('Running Adam trial')
+batch_size = [1000,4000, 8000]
+lr_list = [5e-4,1e-3,3e-3]
+count = 1
+fig = plt.figure()
+fig = plt.figure(figsize=[12,20])
+fig.subplots_adjust(hspace=1, wspace=0.4)
+for batch_s in batch_size:
+    trial = MINE.MINE(train = True, batch = batch_s)
+    for lr in lr_list:
+        for i in range(2):
+            ax = fig.add_subplot(3, 1, count)
+            trial.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
+            trial.mine_net_optim = optim.Adam(trial.net.parameters(), lr = lr)
+            
+            check_trial = trial.train(epochs = 80)    
+            results_Adam.append(check_trial)
+            torch.save(trial.net.state_dict, '/home/michael/Documents/Scxript/Syclop-MINE-master/trained networks/net_Adam_{0}_{1}'.format(batch_s,int(lr*10000)+i))
+            print(check_trial[-1])
+            ax = fig.add_subplot(3,1,count)
+            ax.plot(check_trial[:],label = 'lr={}'.format(lr) )
+            
+    plt.legend(loc=0, frameon=False)
+    plt.title('Mutual Information Neural Estimator MNIST - MNIST batch_size={}'.format(batch_s))
+    plt.xlabel('Epochs')
+    plt.ylabel('bits')
+    count+=1
+
+results_Adam = pd.DataFrame(results_Adam)
+results_Adam.to_pickle('results_Adam')
+results_Adam.to_csv('results_SAdam.csv')
+

@@ -33,64 +33,70 @@ import utils
 
 
 class MINE():
-    def __init__(self):
+    def __init__(self, train = True, batch = 1000, lr = 3e-3):
         
         self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
         #self.input1 = input1
-        print('start')
         #self.input2 = input2
-        self.mine_net_optim = optim.Adam(self.net.parameters(), lr = 3e-3)
+        self.mine_net_optim = optim.SGD(self.net.parameters(), lr = lr)
         
         
     
-        self.dataset = utils.MNIST_for_MINE(train=True)
+        self.dataset = utils.MNIST_for_MINE(train=train)
         
-        self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = 1000, shuffle = True)    
+        self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = batch, shuffle = True)    
         
             
             
     
     def mutual_information(self,joint1, joint2, marginal):
-        t = self.net(joint1, joint2)
-        et = torch.exp(self.net(joint1, marginal))
-        mi_lb = torch.mean(t) - torch.log(torch.mean(et))
-        return mi_lb, t, et
+        T = self.net(joint1, joint2)
+        eT = torch.exp(self.net(joint1, marginal))
+        NIM = torch.mean(T) - torch.log(torch.mean(eT)) #The neural information measure by the Donskar-Varadhan representation
+        return NIM, T, eT
 
-    def learn_mine(self,batch, ma_et, ma_rate=0.01):
-        # batch is a tuple of (joint, marginal)
-        joint1 , joint2, marginal = batch[0], batch[2], batch[4]
+    def learn_mine(self,batch, ma_rate=0.01):
+        # batch is a tuple of (joint1, joint2, marginal (from the dataset of joint 2))
+        joint1 = torch.autograd.Variable(batch[0])
+        joint2 = torch.autograd.Variable(batch[2])
+        marginal = torch.autograd.Variable(batch[4]) #the uneven parts of the dataset are the labels 
         #joint = torch.autograd.Variable(torch.FloatTensor(joint))
         #marginal = torch.autograd.Variable(torch.FloatTensor(marginal))
-        mi_lb , t, et = self.mutual_information(joint1, joint2, marginal)
-        ma_et = (1-ma_rate)*ma_et + ma_rate*torch.mean(et)
         
-        # unbiasing use moving averpyprindage
-        loss = -(torch.mean(t) - (1/ma_et.mean()).detach()*torch.mean(et))
+        NIM , T, eT = self.mutual_information(joint1, joint2, marginal)
+        
+        #Using exponantial moving average to correct bias 
+        ma_eT = (1-ma_rate)*eT + (ma_rate)*torch.mean(eT) 
+        # unbiasing 
+        loss = -(torch.mean(T) - (1/ma_eT.mean()).detach()*torch.mean(eT))
         # use biased estimator
         # loss = - mi_lb
         
         self.mine_net_optim.zero_grad()
         autograd.backward(loss)
         self.mine_net_optim.step()
-        return mi_lb, ma_et
+        return NIM, loss
     
     def train(self, batch_size=100, epochs=1, log_freq=int(1e+3)):
         # data is x or y
         result = list()
-        ma_et = 1
         bar = pyprind.ProgBar(len(self.dataloader)*epochs, monitor = True)
+        nan = None 
         for i in range(epochs):
             temp_results = []
             for idx, batch in enumerate(self.dataloader):
-                mi_lb, ma_et = self.learn_mine(batch, ma_et)
-                temp_results.append(mi_lb.detach().numpy())
-                if not mi_lb.detach().numpy():
-                    print(mi_lb.detach())
+                mi_lb, loss = self.learn_mine(batch)
+                temp_results.append(mi_lb.detach())
+                if torch.isnan(temp_results[-1]):
+                    print(i)
                     plt.plot(result)
+                    nan = True
                     break
                 if (i+1)%(log_freq)==0:
                     print(result[-1])
                 bar.update()
+            if nan:
+                break
             result.append(np.mean(temp_results))
                 
         return result

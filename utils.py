@@ -16,11 +16,26 @@ import torchvision
 
 import numpy as np
 import os
-from skimage.transform import rescale, resize, downscale_local_mean, rotate
-import skimage.segmentation as seg
-from skimage.transform import swirl
-import torch
+#from skimage.transform import rescale, resize, downscale_local_mean, rotate
+#import skimage.segmentation as seg
+#from skimage.transform import swirl
 import matplotlib.pyplot as plt 
+
+
+def one_hot(input_data, nb_digits = 9):
+
+    #Dummy input that HAS to be 2D for the scatter (you can use view(-1,1) if needed)
+    
+    y = input_data.long().unsqueeze(1) % nb_digits
+    #One hot encoding buffer that you create out of the loop and just keep reusing
+    
+    y_onehot = torch.FloatTensor(len(input_data), nb_digits)
+    y_onehot.zero_()
+    y_onehot.scatter_(1, y, 1)
+    
+    return y_onehot
+
+
 
 class MNIST_for_MINE(Dataset):
     def __init__(self, train = False, transform = None):
@@ -28,9 +43,9 @@ class MNIST_for_MINE(Dataset):
         self.transform = transform
         
         for i in range(10):
-            main_dataset = torchvision.datasets.MNIST('home/michael/Documents/MNIST data', 
+            main_dataset = torchvision.datasets.MNIST(os.getcwd(),
                     train = train,download = True)
-            sec_dataset = torchvision.datasets.MNIST('home/michael/Documents/MNIST data',
+            sec_dataset = torchvision.datasets.MNIST(os.getcwd(),
                     train = train, download = True)
                     
             
@@ -45,7 +60,7 @@ class MNIST_for_MINE(Dataset):
                 self.main_targets = torch.utils.data.ConcatDataset([self.main_targets, main_dataset.targets])
               
             idx = np.random.randint(0,len(sec_dataset),len(main_dataset))
-            marginal_temp = torchvision.datasets.MNIST('home/michael/Documents/MNIST data', train = False, download = True)
+            marginal_temp = torchvision.datasets.MNIST(os.getcwd(),train = train, download = True)
             marginal_temp.targets = sec_dataset.targets[idx]
             marginal_temp.data = sec_dataset.data[idx]
             if i == 0:
@@ -109,7 +124,7 @@ class MNIST_for_MINE(Dataset):
     
     def data(self):
         return self.main_data, self.sec_data, self.marginal_data
-    
+'''   
 def noisy(noise_typ,image, rotation = 45, swirl_rate = 5):
     
     #Parameters
@@ -187,3 +202,4 @@ def create_z(orig_data, noise_list = ['gauss','seg-swirl'], limit = True):
         z.append(temp_image)
 
     return z 
+'''
