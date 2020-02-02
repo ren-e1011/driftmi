@@ -19,7 +19,7 @@ import os
 #from skimage.transform import rescale, resize, downscale_local_mean, rotate
 #import skimage.segmentation as seg
 #from skimage.transform import swirl
-import matplotlib.pyplot as plt 
+#import matplotlib.pyplot as plt 
 
 
 def one_hot(input_data, nb_digits = 9):

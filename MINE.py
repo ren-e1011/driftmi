@@ -17,7 +17,7 @@ import os
 import numpy as np
 import pandas as pd
 import pyprind
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 
 import torch
@@ -89,7 +89,7 @@ class MINE():
                 temp_results.append(mi_lb.detach())
                 if torch.isnan(temp_results[-1]):
                     print(i)
-                    plt.plot(result)
+                    #plt.plot(result)
                     nan = True
                     break
                 if (i+1)%(log_freq)==0:
