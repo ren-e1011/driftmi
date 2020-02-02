@@ -1,17 +1,17 @@
 # Syclop-MINE
 A MINE based application to assess Syclop 
 
-Needed packages:
+## Needed packages:
 
-pytorch: version - 1.4.0 
+### pytorch: version - 1.4.0 
 
 pip install torch torchvision
 
-pandas: version - 0.25.1 latest #Officially Python 3.6.1 and above, 3.7, and 3.8
+### pandas: version - 0.25.1 latest #Officially Python 3.6.1 and above, 3.7, and 3.8
 
 pip install pandas
 
-pyprind: version - 2.11.2
+### pyprind: version - 2.11.2
 
 pip install PyPrind
 
