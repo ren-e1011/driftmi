@@ -16,17 +16,17 @@ pip install pandas
 pip install PyPrind
 
 # While running mine_run in terminal: 
-sys.argv gets 4 values:
+sys.argv gets 5 values:
 
-[0] - the optimizer - one of three 1 - Adam, 2 - SGD, 3 - RMSprop
+[1] - the optimizer - one of three 1 - Adam, 2 - SGD, 3 - RMSprop
 
-[1] - learning rate
+[2] - learning rate
 
-[2] - batch_size
+[3] - batch_size
 
-[3] - epochs
+[4] - epochs
 
-[4] - get train MNIST images true/false - 1/0
+[5] - get train MNIST images true/false - 1/0
 
 
 
