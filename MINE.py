@@ -33,22 +33,68 @@ import utils
 
 
 class MINE():
-    def __init__(self, train = True, batch = 1000, lr = 3e-3):
+    def __init__(self, train = True, batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=1):
         
         self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
         #self.input1 = input1
         #self.input2 = input2
-        self.mine_net_optim = optim.SGD(self.net.parameters(), lr = lr)
+        self.lr = lr
+        self.optimizer = optimizer
+        if type(optimizer) != int:
+            optimizer = int(optimizer)
+        if self.optimizer == 1:
+            self.mine_net_optim = optim.SGD(self.net.parameters(), lr = self.lr)
+            print('')
+            print('Optimizer: SGD')
+        elif self.optimizer == 2:
+            self.mine_net_optim = optim.Adam(self.net.parameters(), lr = self.lr)
+            print('')
+            print('Optimizer: Adam')
+        else:
+            self.mine_net_optim = optim.RMSprop(self.net.parameters(), lr = self.lr)
+            print('')
+            print('Optimizer: SGD')
+        
         
         
     
         self.dataset = utils.MNIST_for_MINE(train=train)
-        
+        self.train_value = train
         self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = batch, shuffle = True)    
+        self.batch_size = batch
         
-            
-            
-    
+        #self.scheduler = optim.lr_scheduler.StepLR(self.mine_net_optim, step_size=10*(len(self.dataset)/self.batch_size), gamma=gamma)
+        self.gamma = gamma
+        #self.scheduler2 = optim.lr_scheduler.ReduceLROnPlateau(self.mine_net_optim, mode='max', factor=0.5, patience=10, verbose=False, threshold=0.005, threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-08)    
+        
+        
+        #print all variables of the system:
+        print('Learning rate = {}'.format(self.lr))
+        print('Batch size = {}'.format(self.batch_size))
+        print('Gamma of lr decay = {}'.format(self.gamma))
+        
+    def restart_network(self):
+        self.dataset = utils.MNIST_for_MINE(train=self.train_value)
+        self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = self.batch_size, shuffle = True)    
+        self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
+        print('')
+        print('Restarted Network')
+        if self.optimizer == 1:
+            self.mine_net_optim = optim.SGD(self.net.parameters(), lr = self.lr)
+            print('Optimizer: SGD')
+        elif self.optimizer == 2:
+            self.mine_net_optim = optim.Adam(self.net.parameters(), lr = self.lr)
+            print('Optimizer: Adam')
+        else:
+            self.mine_net_optim = optim.RMSprop(self.net.parameters(), lr = self.lr)
+            print('Optimizer: RMSprop')
+        #self.scheduler = optim.lr_scheduler.StepLR(self.mine_net_optim, step_size=10*(len(self.dataset)/self.batch_size), gamma=self.gamma)
+        print('Learning rate = {}'.format(self.lr))
+        print('Batch size = {}'.format(self.batch_size))
+        print('Gamma of lr decay = {}'.format(self.gamma))
+        
+        
+        
     def mutual_information(self,joint1, joint2, marginal):
         T = self.net(joint1, joint2)
         eT = torch.exp(self.net(joint1, marginal))
@@ -75,28 +121,36 @@ class MINE():
         self.mine_net_optim.zero_grad()
         autograd.backward(loss)
         self.mine_net_optim.step()
+        #self.scheduler.step()
+        #self.scheduler2.step(NIM)
+        
         return NIM, loss
     
-    def train(self, batch_size=100, epochs=1, log_freq=int(1e+3)):
+    def train(self, epochs=1):
         # data is x or y
+        
+        
         result = list()
         bar = pyprind.ProgBar(len(self.dataloader)*epochs, monitor = True)
         nan = None 
+        
         for i in range(epochs):
+            self.dataset = utils.MNIST_for_MINE(train=self.train_value)
+            self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = self.batch_size, shuffle = True)    
             temp_results = []
             for idx, batch in enumerate(self.dataloader):
                 mi_lb, loss = self.learn_mine(batch)
                 temp_results.append(mi_lb.detach())
                 if torch.isnan(temp_results[-1]):
-                    print(i)
+                    print(temp_results[-6:-1])
+                    print('Got to NaN in epoch-{0} and batch {1}'.format(i,idx))
                     #plt.plot(result)
                     nan = True
                     break
-                if (i+1)%(log_freq)==0:
-                    print(result[-1])
                 bar.update()
             if nan:
                 break
+            
             result.append(np.mean(temp_results))
                 
         return result

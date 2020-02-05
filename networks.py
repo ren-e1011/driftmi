@@ -89,6 +89,35 @@ class statistical_estimator_DCGAN(nn.Module):
         
         return x
     
+class statistical_estimator_DCGAN_2(nn.Module):
+    def __init__(self, input_size = 1, output_size = 1):
+        super().__init__()
+        # Define the networks steps:
+        self.conv1 = nn.Conv2d(input_size, 16, 5, stride = 2, padding = 2)
+        self.elu = nn.ELU(inplace = True)
+        self.conv2 = nn.Conv2d(16, 32, 5, stride = 2, padding = 2)
+        self.conv3 = nn.Conv2d(64, 64, 5, stride = 2, padding = 2)
+        self.fc = nn.Linear(1024,output_size)
+        # Define the networks steps:
+        self.conv12 = nn.Conv2d(input_size, 16, 5, stride = 2, padding = 2)
+        self.elu = nn.ELU(inplace = True)
+        self.conv22 = nn.Conv2d(16, 32, 5, stride = 2, padding = 2)
+        self.fc = nn.Linear(1024,output_size)
+    
+    def forward(self, x1,x2):
+        x1 = x1.float().unsqueeze(1)
+        x2 = x2.float().unsqueeze(1)
+        x1 = self.elu(self.conv1(x1))
+        x1 = self.elu(self.conv2(x1))
+        x2 = self.elu(self.conv12(x2))
+        x2 = self.elu(self.conv22(x2))
+        x = torch.cat((x1.float(),x2.float()),1)
+        x = self.elu(self.conv3(x))
+        x = x.view(x.size(0), 64*4*4)
+        x = self.fc(x)
+        
+        return x
+    
 class statistical_estimator_syclope(nn.Module):
     def __init__(self, input_size = 1, output_size = 1):
         super().__init__()
@@ -122,4 +151,8 @@ class statistical_estimator_syclope(nn.Module):
         #x = self.softmax(x)
         
         return x1
+    
+class trajectory_classifier(nn.Module):
+    def __init__(self, input_size = 1, output_size = 1):
+        super().__init__()
         
