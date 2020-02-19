@@ -118,6 +118,41 @@ class statistical_estimator_DCGAN_2(nn.Module):
         
         return x
     
+class statistical_estimator_DCGAN_3(nn.Module):
+    def __init__(self, input_size = 1, output_size = 1):
+        super().__init__()
+        # Define the networks steps:
+        self.conv1 = nn.Conv2d(input_size, 16, 5, stride = 2, padding = 2)
+        self.elu = nn.ELU(inplace = True)
+        self.conv2 = nn.Conv2d(16, 32, 5, stride = 2, padding = 2)
+        self.conv3 = nn.Conv2d(32, 64, 5, stride = 2, padding = 2)
+        self.fc = nn.Linear(1024,output_size)
+        # Define the networks steps:
+        self.conv12 = nn.Conv2d(input_size, 16, 5, stride = 2, padding = 2)
+        self.elu = nn.ELU(inplace = True)
+        self.conv22 = nn.Conv2d(16, 32, 5, stride = 2, padding = 2)
+        self.conv32 = nn.Conv2d(32, 64, 5, stride = 2, padding = 2)
+        self.fc1 = nn.Linear(2*1024,512)
+        #self.fc12 = nn.Linear(1024,256)
+        self.fc2 = nn.Linear(512,output_size)
+    
+    def forward(self, x1,x2):
+        x1 = x1.float().unsqueeze(1)
+        x2 = x2.float().unsqueeze(1)
+        x1 = self.elu(self.conv1(x1))
+        x1 = self.elu(self.conv2(x1))
+        x1 = self.elu(self.conv3(x1))
+        x2 = self.elu(self.conv12(x2))
+        x2 = self.elu(self.conv22(x2)) 
+        x2 = self.elu(self.conv32(x2))
+        x1 = x1.view(x1.size(0), 64*4*4)
+        x2 = x2.view(x2.size(0), 64*4*4)
+        x = torch.cat((x1,x2),1)     
+        x = self.elu(self.fc1(x))
+        x = self.fc2(x)
+        
+        return x
+    
 class statistical_estimator_syclope(nn.Module):
     def __init__(self, input_size = 1, output_size = 1):
         super().__init__()

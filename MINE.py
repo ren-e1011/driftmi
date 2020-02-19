@@ -33,9 +33,14 @@ import utils
 
 
 class MINE():
-    def __init__(self, train = True, batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=1):
-        
-        self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
+    def __init__(self, train = True, batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=1, net_num = 1):
+        self.net_num = net_num
+        if self.net_num == 1:
+            self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
+        elif self.net_num == 2:
+            self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
+        else:
+            self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1)
         #self.input1 = input1
         #self.input2 = input2
         self.lr = lr
@@ -65,7 +70,7 @@ class MINE():
         
         #self.scheduler = optim.lr_scheduler.StepLR(self.mine_net_optim, step_size=10*(len(self.dataset)/self.batch_size), gamma=gamma)
         self.gamma = gamma
-        #self.scheduler2 = optim.lr_scheduler.ReduceLROnPlateau(self.mine_net_optim, mode='max', factor=0.5, patience=10, verbose=False, threshold=0.005, threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-08)    
+        self.scheduler2 = optim.lr_scheduler.ReduceLROnPlateau(self.mine_net_optim, mode='max', factor=0.5, patience=10, verbose=False, threshold=0.0001, threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-08)    
         
         
         #print all variables of the system:
@@ -75,14 +80,20 @@ class MINE():
         
     def restart_network(self):
         self.dataset = utils.MNIST_for_MINE(train=self.train_value)
-        self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = self.batch_size, shuffle = True)    
-        self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
+        self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = self.batch_size, shuffle = True) 
+        if self.net_num == 1 :
+            self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
+        elif self.net_num == 2:
+            self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
+        else:
+            
+            self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1)
         print('')
         print('Restarted Network')
         if self.optimizer == 1:
             self.mine_net_optim = optim.SGD(self.net.parameters(), lr = self.lr)
             print('Optimizer: SGD')
-        elif self.optimizer == 2:
+        elif self.optimizer == 2: 
             self.mine_net_optim = optim.Adam(self.net.parameters(), lr = self.lr)
             print('Optimizer: Adam')
         else:
@@ -92,6 +103,7 @@ class MINE():
         print('Learning rate = {}'.format(self.lr))
         print('Batch size = {}'.format(self.batch_size))
         print('Gamma of lr decay = {}'.format(self.gamma))
+        print('Using Net {}'.format(self.net_num))
         
         
         
@@ -122,7 +134,7 @@ class MINE():
         autograd.backward(loss)
         self.mine_net_optim.step()
         #self.scheduler.step()
-        #self.scheduler2.step(NIM)
+        self.scheduler2.step(NIM)
         
         return NIM, loss
     

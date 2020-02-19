@@ -24,8 +24,8 @@ import os
 
 def one_hot(input_data, nb_digits = 9):
 
-    #Dummy input that HAS to be 2D for the scatter (you can use view(-1,1) if needed)
-    
+    if type(input_data) != torch.Tensor:
+        input_data = torch.tensor(input_data)
     y = input_data.long().unsqueeze(1) % nb_digits
     #One hot encoding buffer that you create out of the loop and just keep reusing
     
@@ -35,7 +35,8 @@ def one_hot(input_data, nb_digits = 9):
     
     return y_onehot
 
-
+#Build Dataset of trajectories and MNIST
+#Checked and the trajectories order is the same as the data set. 
 
 class MNIST_for_MINE(Dataset):
     def __init__(self, train = False, transform = None):
