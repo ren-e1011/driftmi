@@ -16,7 +16,7 @@ pip install pandas
 pip install PyPrind
 
 
-# sys.argv gets 4 values:
+# sys.argv gets 9 values:
 
 [1] - the optimizer - one of three Adam, SGD, RMSprop
 
@@ -34,7 +34,7 @@ pip install PyPrind
 
 [8] - number_repeating_blocks - the number of times to repeat a particular layer
 
-[9] - repeating_blockd_size - the size of nodes of the layer to repeat
+[9] - repeating_blockd_size - the size of nodes of the layer to repeat (2048, 1024, 512, 128, 64, 32)
 
 For example, number_descending_blocks = 5, number_repeating_blocks = 3, and repeating_blockd_size = 512 then the net architecture will look like:
 
