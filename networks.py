@@ -119,22 +119,38 @@ class statistical_estimator_DCGAN_2(nn.Module):
         return x
     
 class statistical_estimator_DCGAN_3(nn.Module):
-    def __init__(self, input_size = 1, output_size = 1):
+    def __init__(self, input_size = 1, output_size = 1,number_descending_blocks=4, number_repeating_blocks = 3, repeating_blockd_size = 512):
         super().__init__()
+        if type(repeating_blockd_size) == int:
+            repeating_blockd_size = [repeating_blockd_size]
         # Define the networks steps:
         self.conv1 = nn.Conv2d(input_size, 16, 5, stride = 2, padding = 2)
         self.elu = nn.ELU(inplace = True)
         self.conv2 = nn.Conv2d(16, 32, 5, stride = 2, padding = 2)
         self.conv3 = nn.Conv2d(32, 64, 5, stride = 2, padding = 2)
-        self.fc = nn.Linear(1024,output_size)
+        #self.fc = nn.Linear(1024,output_size)
         # Define the networks steps:
         self.conv12 = nn.Conv2d(input_size, 16, 5, stride = 2, padding = 2)
         self.elu = nn.ELU(inplace = True)
         self.conv22 = nn.Conv2d(16, 32, 5, stride = 2, padding = 2)
         self.conv32 = nn.Conv2d(32, 64, 5, stride = 2, padding = 2)
-        self.fc1 = nn.Linear(2*1024,512)
+        fc = []
+        in_dim = int(2048)
+        if number_descending_blocks>7:
+            print('number_descending_blocks should be <= 7, assigning descending_block_size = 7')
+            number_descending_blocks = 7
+        for i in range(number_descending_blocks):
+            new_dim = int(in_dim/2)
+            if in_dim in repeating_blockd_size:
+                for j in range(number_repeating_blocks):
+                    fc.append(nn.Linear(in_dim,in_dim))
+            else:
+                fc.append(nn.Linear(in_dim,new_dim))
+            in_dim = new_dim
+            
+        self.fc = nn.ModuleList(fc)
         #self.fc12 = nn.Linear(1024,256)
-        self.fc2 = nn.Linear(512,output_size)
+        self.fc_last = nn.Linear(fc[-1].out_features,output_size)
     
     def forward(self, x1,x2):
         x1 = x1.float().unsqueeze(1)
@@ -147,9 +163,10 @@ class statistical_estimator_DCGAN_3(nn.Module):
         x2 = self.elu(self.conv32(x2))
         x1 = x1.view(x1.size(0), 64*4*4)
         x2 = x2.view(x2.size(0), 64*4*4)
-        x = torch.cat((x1,x2),1)     
-        x = self.elu(self.fc1(x))
-        x = self.fc2(x)
+        x = torch.cat((x1,x2),1) 
+        for idx, des_fc in enumerate(self.fc):
+            x = self.elu(des_fc(x))
+        x = self.fc_last(x)
         
         return x
     
@@ -190,4 +207,24 @@ class statistical_estimator_syclope(nn.Module):
 class trajectory_classifier(nn.Module):
     def __init__(self, input_size = 1, output_size = 1):
         super().__init__()
+        self.actions_conv1 = nn.Conv1d(9,18,3)
+        self.batchNorm1 = nn.BatchNorm1d(18)
+        self.actions_conv2 = nn.Conv1d(18,36,5)
+        self.batchNorm2 = nn.BatchNorm1d(36)
+        self.actions_conv3 = nn.Conv1d(36,9,3)
+        self.batchNorm3 = nn.BatchNorm1d(9)
+        self.fc1 = nn.Linear(122*9, 512)
+        self.fc2 = nn.Linear(512, 10)
+        self.pool = nn.MaxPool1d(2)
+        self.relu = nn.ReLU()
+        
+    def forward(self,x):
+        x = self.pool(self.relu(self.batchNorm1(self.actions_conv1(x))))
+        x = self.pool(self.relu(self.batchNorm2(self.actions_conv2(x))))
+        x = self.pool(self.relu(self.batchNorm3(self.actions_conv3(x))))
+        x = x.view(x.size(0), 122*9)
+        x = self.relu(self.fc1(x))
+        x = self.fc2(x)
+       
+        return x
         

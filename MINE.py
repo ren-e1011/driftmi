@@ -33,14 +33,20 @@ import utils
 
 
 class MINE():
-    def __init__(self, train = True, batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=1, net_num = 1):
+    def __init__(self, train = True, batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=1, net_num = 1,
+                 number_descending_blocks = 3, 
+                 number_repeating_blocks=2, repeating_blockd_size=512):
         self.net_num = net_num
         if self.net_num == 1:
             self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
         elif self.net_num == 2:
             self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
         else:
-            self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1)
+            self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1,number_descending_blocks = number_descending_blocks, 
+                 number_repeating_blocks=number_repeating_blocks, repeating_blockd_size = repeating_blockd_size)
+        self.number_descending_blocks = number_descending_blocks 
+        self.number_repeating_blocks = number_repeating_blocks 
+        self.repeating_blockd_size = repeating_blockd_size
         #self.input1 = input1
         #self.input2 = input2
         self.lr = lr
@@ -76,7 +82,12 @@ class MINE():
         #print all variables of the system:
         print('Learning rate = {}'.format(self.lr))
         print('Batch size = {}'.format(self.batch_size))
-        print('Gamma of lr decay = {}'.format(self.gamma))
+        #print('Gamma of lr decay = {}'.format(self.gamma))
+        print('Using Net {}'.format(self.net_num))
+        if self.net_num == 3:
+            print('Number of Descending Blocks is {}'.format(self.number_descending_blocks))
+            print('Number of times to repeat a block = {}'.format(self.number_repeating_blocks))
+            print('The fully connected layer to repeat - {}'.format(self.repeating_blockd_size))
         
     def restart_network(self):
         self.dataset = utils.MNIST_for_MINE(train=self.train_value)
@@ -87,7 +98,9 @@ class MINE():
             self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
         else:
             
-            self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1)
+            self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1,
+                                                              number_descending_blocks = self.number_descending_blocks, 
+                 number_repeating_blocks=self.number_repeating_blocks, repeating_blockd_size = self.repeating_blockd_size)
         print('')
         print('Restarted Network')
         if self.optimizer == 1:
@@ -102,11 +115,14 @@ class MINE():
         #self.scheduler = optim.lr_scheduler.StepLR(self.mine_net_optim, step_size=10*(len(self.dataset)/self.batch_size), gamma=self.gamma)
         print('Learning rate = {}'.format(self.lr))
         print('Batch size = {}'.format(self.batch_size))
-        print('Gamma of lr decay = {}'.format(self.gamma))
+        #print('Gamma of lr decay = {}'.format(self.gamma))
         print('Using Net {}'.format(self.net_num))
-        
-        
-        
+        if self.net_num == 3:
+            print('Number of Descending Blocks is {}'.format(self.number_descending_blocks))
+            print('Number of times to repeat a block = {}'.format(self.number_repeating_blocks))
+            print('The fully connected layer to repeat - {}'.format(self.repeating_blockd_size))
+            
+            
     def mutual_information(self,joint1, joint2, marginal):
         T = self.net(joint1, joint2)
         eT = torch.exp(self.net(joint1, marginal))
