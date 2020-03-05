@@ -1,0 +1,5 @@
+#BSUB -q new-medium
+#BSUB -J example
+#BSUB -o example-%J.o
+#BSUB -e example-%J.e
+python mine_run.py 1 1e-3 1000 10 1
