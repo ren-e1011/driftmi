@@ -1,12 +1,10 @@
 #!/bin/sh
 
-
 param1=(3e-3 5e-4)
 param2=(500 1000)
 param7=(2 4 7)
 param8=(0 3 8)
 param9=(512 256)
-
 maxtry1=2 #${param[@]}
 maxtry2=2 
 maxtry7=3 
@@ -28,7 +26,6 @@ do
 try9=0
 while [ $try9 -lt $maxtry9 ]
 do
-
 
 
 cat iter.job <(echo python mine_run.py 2 ${param1[$try1]}   ${param2[$try2]} 901 1 3 ${param7[$try7]} ${param8[$try8]} ${param9[$try9]})  > nana.job
