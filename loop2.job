@@ -7,11 +7,11 @@ param7=(2 4 7)
 param8=(0 3 8)
 param9=(512 256)
 
-maxtry1=3 #${param[@]}
-maxtry2=3
-maxtry7=3
-maxtry8=3
-maxtry9=3 
+maxtry1=2 #${param[@]}
+maxtry2=2 
+maxtry7=3 
+maxtry8=3 
+maxtry9=2 
 
 try1=0
 while [ $try1 -lt $maxtry1 ]
