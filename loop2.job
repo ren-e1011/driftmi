@@ -35,17 +35,14 @@ cat iter.job <(echo python mine_run.py 2 ${param1[$try1]}   ${param2[$try2]} 901
 
 bsub  -R "select[mem>4096] rusage[mem=4000]" <nana.job
 
-try9=`expr $try9 + 1`
+try9=`expr $try9 + 1`conv_depth_array[4]
 sleep .1
 done
 try8=`expr $try8 + 1`
-sleep .1
 done
 try7=`expr $try7 + 1`
-sleep .1
 done
 try2=`expr $try2 + 1`
-sleep .1
 done
 try1=`expr $try1 + 1`
 done
