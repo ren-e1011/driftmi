@@ -3,15 +3,15 @@
 
 param1=(3e-3 5e-4)
 param2=(500 1000)
-param7 = (2 4 7)
-param8 = (0 3 8)
-param9 = (512 256)
+param7=(2 4 7)
+param8=(0 3 8)
+param9=(512 256)
 
 maxtry1=3 #${param[@]}
 maxtry2=3
-maxtry7 = 3
-maxtry8 = 3
-maxtry9 = 3 
+maxtry7=3
+maxtry8=3
+maxtry9=3 
 
 try1=0
 while [ $try1 -lt $maxtry1 ]
