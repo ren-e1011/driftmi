@@ -10,6 +10,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.autograd as autograd
+import numpy as np
+
+import utils
 
 class statistical_estimator_big(nn.Module):
     def __init__(self, input_size = 1, output_size = 10):
@@ -203,17 +206,115 @@ class statistical_estimator_syclope(nn.Module):
         #x = self.softmax(x)
         
         return x1
+
+class trajectory_classifier_(nn.Module):
+    def __init__(self,input_dim = [9,1000,0], output_size = 10, p_conv=0.1, p_fc = 0.5, max_depth = 64, stride = 3, kernel = 3, padding = [0,0,0,4,4]):
+        super().__init__()
+        '''
+        flexible network that calculates the network dimentions to accomidate changes
+        in all veriables.
+        
+        '''
+        self.p_conv = p_conv
+        self.p_fc = p_fc
+        conv_depth_array = np.linspace(9,max_depth, 6).astype(int)
+        if len(stride) == 1:
+            stride = np.ones(5)*stride
+        else:
+            if len(stride) < 5:
+                print('stride should be an integar or a five element list taking first element only')
+                stride = np.ones(5)*stride[0]
+        if len(kernel) == 1:
+            kernel = np.ones(5)*kernel
+        else:
+            if len(kernel) < 5:
+                print('kernel should be an integar or a five element list taking first element only')  
+                kernel = np.ones(5)*kernel[0]
+        if len(padding) == 1:
+            kernel = np.ones(5)*padding
+        else:
+            if len(padding) < 5:
+                print('kernel should be an integar or a five element list taking first element only')  
+                padding = np.ones(5)*padding[0]
+        dim = []
+        self.actions_conv1 = nn.Conv1d(9,conv_depth_array[1],kernel[0], stride = stride[0], padding = padding[0])
+        dim_w, _ = utils.conv_block_calculator(input_dim[0], input_h = input_dim[1], kernel = kernel[0], stride = stride[0], padding = padding[0], pooling = 2)
+        dim.append(dim_w)
+        self.actions_conv2 = nn.Conv1d(conv_depth_array[1],conv_depth_array[2],kernel[1], stride = stride[1], padding = padding[1])
+        dim_w, _ = utils.conv_block_calculator(dim_w, input_h = None, kernel = kernel[1], stride = stride[1], padding = padding[1], pooling = 2)
+        dim.append(dim_w)
+        self.actions_conv3 = nn.Conv1d(conv_depth_array[2],conv_depth_array[3],kernel[2], stride = stride[2], padding = padding[2])
+        dim_w, _ = utils.conv_block_calculator(dim_w, input_h = None, kernel = kernel[2], stride = stride[2], padding = padding[2], pooling = 0)
+        dim.append(dim_w)
+        self.actions_conv4 = nn.Conv1d(conv_depth_array[3],conv_depth_array[4],kernel[3], stride = stride[3], padding = padding[3])
+        dim_w, _ = utils.conv_block_calculator(dim_w, input_h = None, kernel = kernel[3], stride = stride[3], padding = padding[3], pooling = 0)
+        dim.append(dim_w)
+        self.actions_conv5 = nn.Conv1d(conv_depth_array[4],conv_depth_array[5],kernel[4], stride = stride[4], padding = padding[4])
+        self.final_conv_dim, _ = utils.conv_block_calculator(dim_w, input_h = None, kernel = kernel[4], stride = stride[4], padding = padding[4], pooling = 0)
+        dim.append(self.final_conv_dim)
+        if self.final_conv_dim < 1:
+            return
+    
+        self.fc_first_size = self.final_conv_dim*conv_depth_array[5]         
+        #Creating a network with or without batchnorm/dropout
+        if p_conv > 0:
+            self.drop1 = nn.Dropout(p=p_conv)
+            self.drop2 = nn.Dropout(p=p_conv)
+            self.drop3 = nn.Dropout(p=p_conv)
+            self.drop4 = nn.Dropout(p=p_conv)
+            self.drop5 = nn.Dropout(p=p_conv)
+        else:
+            self.batchNorm1 = nn.BatchNorm1d(conv_depth_array[1])
+            self.batchNorm2 = nn.BatchNorm1d(conv_depth_array[2])
+            self.batchNorm3 = nn.BatchNorm1d(conv_depth_array[3])
+            self.batchNorm4 = nn.BatchNorm1d(conv_depth_array[4])
+            self.batchNorm5 = nn.BatchNorm1d(conv_depth_array[5])
+        self.fc1 = nn.Linear(self.fc_first_size, self.fc_first_size)
+        self.dropfc1 = nn.Dropout(p=p_fc)
+        self.fc2 = nn.Linear(self.fc_first_size, self.fc_first_size)
+        self.dropfc2 = nn.Dropout(p=p_fc)
+        self.fc3 = nn.Linear(self.fc_first_size, output_size)
+        self.pool = nn.MaxPool1d(2)
+        self.relu = nn.ReLU()
+        self.conv_depth_array = conv_depth_array
+    def forward(self,x):
+        if self.p_conv:   
+            x = self.pool(self.relu(self.drop1(self.actions_conv1(x))))
+            x = self.pool(self.relu(self.drop2(self.actions_conv2(x))))
+            x = self.relu(self.drop3(self.actions_conv3(x)))
+            x = self.relu(self.drop4(self.actions_conv4(x)))
+            x = self.relu(self.drop5(self.actions_conv5(x)))
+        else:
+            x = self.pool(self.relu(self.batchNorm1(self.actions_conv1(x))))
+            x = self.pool(self.relu(self.batchNorm2(self.actions_conv2(x))))
+            x = self.relu(self.batchNorm3(self.actions_conv3(x)))
+            x = self.relu(self.batchNorm4(self.actions_conv4(x)))
+            x = self.relu(self.batchNorm5(self.actions_conv5(x)))
+        x = x.view(x.size(0), 4*self.conv_depth_array[5])
+        x = self.relu(self.dropfc1(self.fc1(x)))
+        x = self.relu(self.dropfc2(self.fc2(x)))
+        x = self.fc3(x)
+       
+        return x
     
 class trajectory_classifier(nn.Module):
-    def __init__(self, input_size = 1, output_size = 1):
+    def __init__(self, input_size = 1, output_size = 10,max_depth = 64):
         super().__init__()
-        self.actions_conv1 = nn.Conv1d(9,18,3)
-        self.batchNorm1 = nn.BatchNorm1d(18)
-        self.actions_conv2 = nn.Conv1d(18,36,5)
-        self.batchNorm2 = nn.BatchNorm1d(36)
-        self.actions_conv3 = nn.Conv1d(36,9,3)
-        self.batchNorm3 = nn.BatchNorm1d(9)
-        self.fc1 = nn.Linear(122*9, 512)
+        conv_depth_array = np.linspace(9,max_depth, 6).astype(int)
+        self.actions_conv1 = nn.Conv1d(9,conv_depth_array[1],5, stride = 3)
+        self.batchNorm1 = nn.BatchNorm1d(conv_depth_array[1])
+        self.actions_conv2 = nn.Conv1d(conv_depth_array[1],conv_depth_array[2],5, stride = 3)
+        
+        self.batchNorm2 = nn.BatchNorm1d(conv_depth_array[2])
+        self.actions_conv3 = nn.Conv1d(conv_depth_array[2],conv_depth_array[3],5, stride = 3)
+        self.batchNorm3 = nn.BatchNorm1d(conv_depth_array[3])
+        self.actions_conv4 = nn.Conv1d(conv_depth_array[3],conv_depth_array[4],5, stride = 3, padding = 4)
+        self.batchNorm4 = nn.BatchNorm1d(conv_depth_array[4])
+        self.actions_conv5 = nn.Conv1d(conv_depth_array[4],conv_depth_array[5],5, stride = 3, padding = 4)
+        self.batchNorm5 = nn.BatchNorm1d(conv_depth_array[5])
+        self.conv_depth_array = conv_depth_array
+        self.fc1 = nn.Linear(3*self.conv_depth_array[5], 512)
+        self.batchnormfc1 = nn.BatchNorm1d(512)
         self.fc2 = nn.Linear(512, 10)
         self.pool = nn.MaxPool1d(2)
         self.relu = nn.ReLU()
@@ -221,10 +322,191 @@ class trajectory_classifier(nn.Module):
     def forward(self,x):
         x = self.pool(self.relu(self.batchNorm1(self.actions_conv1(x))))
         x = self.pool(self.relu(self.batchNorm2(self.actions_conv2(x))))
-        x = self.pool(self.relu(self.batchNorm3(self.actions_conv3(x))))
-        x = x.view(x.size(0), 122*9)
+        x = self.relu(self.batchNorm3(self.actions_conv3(x)))
+        x = self.relu(self.batchNorm4(self.actions_conv4(x)))
+        x = self.relu(self.batchNorm5(self.actions_conv5(x)))
+        x = x.view(x.size(0), 3*self.conv_depth_array[5])
         x = self.relu(self.fc1(x))
         x = self.fc2(x)
        
         return x
+    
+class trajectory_classifier_dropout_fc(nn.Module):
+    def __init__(self, input_size = 1, output_size = 10, p_fc = 0.5, max_depth = 64):
+        super().__init__()
+        conv_depth_array = np.linspace(9,max_depth, 6).astype(int)
+        self.actions_conv1 = nn.Conv1d(9,conv_depth_array[1],5, stride = 3)
+        self.batchNorm1 = nn.BatchNorm1d(conv_depth_array[1])
+        self.actions_conv2 = nn.Conv1d(conv_depth_array[1],conv_depth_array[2],5, stride = 3)
         
+        self.batchNorm2 = nn.BatchNorm1d(conv_depth_array[2])
+        self.actions_conv3 = nn.Conv1d(conv_depth_array[2],conv_depth_array[3],5, stride = 3)
+        self.batchNorm3 = nn.BatchNorm1d(conv_depth_array[3])
+        self.actions_conv4 = nn.Conv1d(conv_depth_array[3],conv_depth_array[4],5, stride = 3, padding = 4)
+        self.batchNorm4 = nn.BatchNorm1d(conv_depth_array[4])
+        self.actions_conv5 = nn.Conv1d(conv_depth_array[4],conv_depth_array[5],5, stride = 3, padding = 4)
+        self.batchNorm5 = nn.BatchNorm1d(conv_depth_array[5])
+        self.conv_depth_array = conv_depth_array
+        self.fc1 = nn.Linear(3*self.conv_depth_array[5], 3*self.conv_depth_array[5])
+        self.dropfc1 = nn.Dropout(p=p_fc)
+        self.fc2 = nn.Linear(3*self.conv_depth_array[5], 512)
+        self.dropfc2 = nn.Dropout(p=p_fc)
+        self.fc3 = nn.Linear(512, output_size)
+        self.pool = nn.MaxPool1d(2)
+        self.relu = nn.ReLU()
+        
+    def forward(self,x):
+        x = self.pool(self.relu(self.batchNorm1(self.actions_conv1(x))))
+        x = self.pool(self.relu(self.batchNorm2(self.actions_conv2(x))))
+        x = self.relu(self.batchNorm3(self.actions_conv3(x)))
+        x = self.relu(self.batchNorm4(self.actions_conv4(x)))
+        x = self.relu(self.batchNorm5(self.actions_conv5(x)))
+        x = x.view(x.size(0), 3*self.conv_depth_array[5])
+        x = self.relu(self.dropfc1(self.fc1(x)))
+        x = self.relu(self.dropfc2(self.fc2(x)))
+        x = self.fc3(x)
+       
+        return x
+    
+class trajectory_classifier_dropout(nn.Module):
+    def __init__(self, output_size = 10, p_conv=0.1, p_fc = 0.5, max_depth = 64):
+        super().__init__()
+        conv_depth_array = np.linspace(9,max_depth, 5).astype(int)
+        self.actions_conv1 = nn.Conv1d(9,conv_depth_array[1],5, stride = 3)
+        self.drop1 = nn.Dropout(p=p_conv)
+        self.actions_conv2 = nn.Conv1d(conv_depth_array[1],conv_depth_array[2],5, stride = 3)
+        self.drop2 = nn.Dropout(p=p_conv)
+        self.actions_conv3 = nn.Conv1d(conv_depth_array[2],conv_depth_array[3],5, stride = 3)
+        self.drop3 = nn.Dropout(p=p_conv)
+        self.actions_conv4 = nn.Conv1d(conv_depth_array[3],conv_depth_array[4],5, stride = 3, padding = 9)
+        self.drop4 = nn.Dropout(p=p_conv)
+        #self.actions_conv5 = nn.Conv1d(conv_depth_array[4],conv_depth_array[4],5, stride = 2, padding = 9)
+        #self.drop5 = nn.Dropout(p=p_conv)
+        #self.actions_conv6 = nn.Conv1d(conv_depth_array[4],conv_depth_array[4],5, stride = 2, padding = 9)
+        #self.drop6 = nn.Dropout(p=p_conv)
+        self.actions_conv7 = nn.Conv1d(conv_depth_array[4],conv_depth_array[2],5, stride = 3, padding = 0)
+        self.drop7 = nn.Dropout(p=p_conv)
+
+        self.fc1 = nn.Linear(2*conv_depth_array[2], 512)
+        self.dropfc1 = nn.Dropout(p=p_fc)
+        self.fc2 = nn.Linear(512, output_size)
+        self.pool = nn.MaxPool1d(2)
+        self.relu = nn.ReLU()
+        self.conv_depth_array = conv_depth_array
+    def forward(self,x):
+        x = self.pool(self.relu(self.drop1(self.actions_conv1(x))))
+        x = self.pool(self.relu(self.drop2(self.actions_conv2(x))))
+        x = self.relu(self.drop3(self.actions_conv3(x)))
+        x = self.relu(self.drop4(self.actions_conv4(x)))
+        
+        #x = self.relu(self.drop5(self.actions_conv5(x)))
+        #x = self.relu(self.drop6(self.actions_conv6(x)))
+        x = self.relu(self.drop7(self.actions_conv7(x)))
+        x = x.view(x.size(0), 2*self.conv_depth_array[2])
+        x = self.relu(self.dropfc1(self.fc1(x)))
+        x = self.fc2(x)
+       
+        return x
+        
+class trajectory_classifier_dropout2(nn.Module):
+    def __init__(self, output_size = 10, p_conv=0.1, p_fc = 0.5, max_depth = 64):
+        super().__init__()
+        conv_depth_array = np.linspace(9,max_depth, 6).astype(int)
+        self.actions_conv1 = nn.Conv1d(9,conv_depth_array[1],5, stride = 3)
+        self.drop1 = nn.Dropout(p=p_conv)
+        self.actions_conv2 = nn.Conv1d(conv_depth_array[1],conv_depth_array[2],3, stride = 3, padding = 4)
+        self.drop2 = nn.Dropout(p=p_conv)
+        self.actions_conv3 = nn.Conv1d(conv_depth_array[2],conv_depth_array[3],3, stride = 3,padding = 4)
+        self.drop3 = nn.Dropout(p=p_conv)
+        self.actions_conv4 = nn.Conv1d(conv_depth_array[3],conv_depth_array[4],5, stride = 3, padding = 4)
+        self.drop4 = nn.Dropout(p=p_conv)
+        self.actions_conv5 = nn.Conv1d(conv_depth_array[4],conv_depth_array[5],5, stride = 3, padding = 4)
+        self.drop5 = nn.Dropout(p=p_conv)
+        self.fc1 = nn.Linear(4*conv_depth_array[5], 4*conv_depth_array[5])
+        self.dropfc1 = nn.Dropout(p=p_fc)
+        self.fc2 = nn.Linear(4*conv_depth_array[5], 4*conv_depth_array[5])
+        self.dropfc2 = nn.Dropout(p=p_fc)
+        self.fc3 = nn.Linear(4*conv_depth_array[5], output_size)
+        self.pool = nn.MaxPool1d(2)
+        self.relu = nn.ReLU()
+        self.conv_depth_array = conv_depth_array
+    def forward(self,x):
+        x = self.pool(self.relu(self.drop1(self.actions_conv1(x))))
+        x = self.pool(self.relu(self.drop2(self.actions_conv2(x))))
+        x = self.relu(self.drop3(self.actions_conv3(x)))
+        x = self.relu(self.drop4(self.actions_conv4(x)))
+        x = self.relu(self.drop5(self.actions_conv5(x)))
+        x = x.view(x.size(0), 4*self.conv_depth_array[5])
+        x = self.relu(self.dropfc1(self.fc1(x)))
+        x = self.relu(self.dropfc2(self.fc2(x)))
+        x = self.fc3(x)
+       
+        return x
+    
+'''
+class trajectory_classifier_2(nn.Module):
+    def __init__(self,input_dim = [9,1000,0], output_size = 10, p_conv=0.1, p_fc = 0.5, max_depth = 64, stride = 3, kernel = 3, padding = [0,0,0,4,4], num_conv_layers = 5, num_fc_layers = 2):
+        super().__init__()
+ 
+        self.p_conv = p_conv
+        self.p_fc = p_fc
+        conv_depth_array = np.linspace(9,max_depth, 6).astype(int)
+        if len(stride) == 1:
+            stride = np.ones(num_conv_layers)*stride
+        else:
+            if len(stride) < 5:
+                print('stride should be an integar or num_conv_layers element list taking first element only')
+                stride = np.ones(num_conv_layers)*stride[0]
+        if len(kernel) == 1:
+            kernel = np.ones(num_conv_layers)*kernel
+        else:
+            if len(kernel) < 5:
+                print('kernel should be an integar or a num_conv_layers element list taking first element only')  
+                kernel = np.ones(num_conv_layers)*kernel[0]
+        if len(padding) == 1:
+            kernel = np.ones(num_conv_layers)*padding
+        else:
+            if len(padding) < 5:
+                print('kernel should be an integar or a num_conv_layers element list taking first element only')  
+                padding = np.ones(num_conv_layers)*padding[0]
+        dim = []
+        self.actions_conv1 = nn.Conv1d(9,conv_depth_array[1],kernel[0], stride = stride[0], padding = padding[0])
+        dim_w, _ = utils.conv_block_calculator(input_dim[0], input_h = input_dim[1], kernel = kernel[0], stride = stride[0], padding = padding[0], pooling = 2)
+        dim.append(dim_w)
+        self.actions_conv2 = nn.Conv1d(conv_depth_array[1],conv_depth_array[2],kernel[1], stride = stride[1], padding = padding[1])
+        dim_w, _ = utils.conv_block_calculator(dim_w, input_h = None, kernel = kernel[1], stride = stride[1], padding = padding[1], pooling = 2)
+        dim.append(dim_w)
+        self.actions_conv3 = nn.Conv1d(conv_depth_array[2],conv_depth_array[3],kernel[2], stride = stride[2], padding = padding[2])
+        dim_w, _ = utils.conv_block_calculator(dim_w, input_h = None, kernel = kernel[2], stride = stride[2], padding = padding[2], pooling = 0)
+        dim.append(dim_w)
+        self.actions_conv4 = nn.Conv1d(conv_depth_array[3],conv_depth_array[4],kernel[3], stride = stride[3], padding = padding[3])
+        dim_w, _ = utils.conv_block_calculator(dim_w, input_h = None, kernel = kernel[3], stride = stride[3], padding = padding[3], pooling = 0)
+        dim.append(dim_w)
+        self.actions_conv5 = nn.Conv1d(conv_depth_array[4],conv_depth_array[5],kernel[4], stride = stride[4], padding = padding[4])
+        self.final_conv_dim, _ = utils.conv_block_calculator(dim_w, input_h = None, kernel = kernel[4], stride = stride[4], padding = padding[4], pooling = 0)
+        dim.append(self.final_conv_dim)
+        if self.final_conv_dim < 1:
+            
+        self.fc_first_size = self.final_conv_dim*conv_depth_array[5]         
+        #Creating a network with or without batchnorm/dropout
+        if p_conv > 0:
+            self.drop1 = nn.Dropout(p=p_conv)
+            self.drop2 = nn.Dropout(p=p_conv)
+            self.drop3 = nn.Dropout(p=p_conv)
+            self.drop4 = nn.Dropout(p=p_conv)
+            self.drop5 = nn.Dropout(p=p_conv)
+        else:
+            self.batchNorm1 = nn.BatchNorm1d(conv_depth_array[1])
+            self.batchNorm2 = nn.BatchNorm1d(conv_depth_array[2])
+            self.batchNorm3 = nn.BatchNorm1d(conv_depth_array[3])
+            self.batchNorm4 = nn.BatchNorm1d(conv_depth_array[4])
+            self.batchNorm5 = nn.BatchNorm1d(conv_depth_array[5])
+        self.fc1 = nn.Linear(self.fc_first_size, self.fc_first_size)
+        self.dropfc1 = nn.Dropout(p=p_fc)
+        self.fc2 = nn.Linear(self.fc_first_size, self.fc_first_size)
+        self.dropfc2 = nn.Dropout(p=p_fc)
+        self.fc3 = nn.Linear(self.fc_first_size, output_size)
+        self.pool = nn.MaxPool1d(2)
+        self.relu = nn.ReLU()
+        self.conv_depth_array = conv_depth_array
+'''

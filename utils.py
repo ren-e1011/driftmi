@@ -13,14 +13,117 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 import torchvision
+import pyprind
 
 import numpy as np
 import os
+import pickle
+
+import sys
+sys.path.append('/home/michael/Documents/Scxript/torchsample-master/torchsample/')
 #from skimage.transform import rescale, resize, downscale_local_mean, rotate
 #import skimage.segmentation as seg
 #from skimage.transform import swirl
 #import matplotlib.pyplot as plt 
 
+cwd = os.getcwd()
+
+def conv_block_calculator(input_w, input_h = None, kernel = 5, stride = 0, padding = 0, pooling = 0):
+    if ~input_h:
+        input_h = input_w
+    dim_w = ((input_w + 2*padding - (kernel-1)-1)/stride) + 1
+    dim_h = ((input_h + 2*padding - (kernel-1)-1)/stride) + 1
+    if pooling:
+        dim_w /=pooling
+        dim_h /=pooling
+    return dim_w, dim_h
+
+def create_train_test(dr = cwd):
+    with open(cwd+'/mnist_padded_act_full/mnist_padded_act_full1.pkl', 'rb') as f:
+        # The protocol version used is detected automatically, so we do not
+        # have to specify it.
+        data1 = pickle.load(f)
+    
+    with open(cwd+'/mnist_padded_act_full/mnist_padded_act_full2.pkl', 'rb') as f:
+        # The protocol version used is detected automatically, so we do not
+        # have to specify it.
+        data2 = pickle.load(f)
+    
+    
+    data = data1[0] + data2[0]
+    labels = data1[1] + data2[1]
+    dataset = [data,labels]
+    dataset = one_hot_dataset(dataset)
+    
+    data1 = []
+    data2 = []
+    
+    k = int(len(dataset)*0.09)
+    train, test = sampleFromClass(dataset,k)
+    return train, test
+
+def sampleFromClass(ds, k):
+    '''
+    ds == Dataset
+    k == Number of examples from each class
+    '''
+    class_counts = {}
+    train_data = []
+    train_label = []
+    test_data = []
+    test_label = []
+    for data, label in ds:
+        
+        c = label.item()
+        class_counts[c] = class_counts.get(c, 0) + 1
+        if class_counts[c] <= k:
+            train_data.append(data)
+            train_label.append(torch.unsqueeze(label, 0))
+        else:
+            test_data.append(data)
+            test_label.append(torch.unsqueeze(label, 0))
+    print(class_counts)
+    train_data = torch.stack(train_data)
+    #for ll in train_label:
+    #    print(ll)
+    train_label = torch.cat(train_label)
+    test_data = torch.stack(test_data)
+    test_label = torch.cat(test_label)
+    print(train_data.size(), train_label.size(),test_data.size(),test_label.size())
+    return (torch.utils.data.TensorDataset(train_data, train_label), 
+        torch.utils.data.TensorDataset(test_data, test_label))
+    
+class one_hot_dataset(Dataset):
+    def __init__(self, traject_data, nb_digits = 9):
+        
+        self.labels = torch.tensor(traject_data[1])
+        self.orig_data = traject_data[0]
+        self.dataset = []
+        bar = pyprind.ProgBar(len(self.orig_data),monitor = True)
+        for i in range(len(self.orig_data)):
+            self.dataset.append(one_hot(self.orig_data[i]).transpose(0,1))
+            bar.update()
+        self.dataset = torch.stack(self.dataset)
+        
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, idx):
+        '''
+        args idx (int) :  index
+        
+        returns: tuple(trajectory, label)
+        '''
+        trajectory = self.dataset[idx]
+        label = self.labels[idx]
+        
+        return trajectory, label
+    
+    def data(self):
+        return self.dataset
+    def targets(self):
+        return self.labels
+    
 
 def one_hot(input_data, nb_digits = 9):
 
@@ -33,7 +136,9 @@ def one_hot(input_data, nb_digits = 9):
     y_onehot.zero_()
     y_onehot.scatter_(1, y, 1)
     
-    return y_onehot
+    return y_onehot 
+
+
 
 #Build Dataset of trajectories and MNIST
 #Checked and the trajectories order is the same as the data set. 
