@@ -33,11 +33,16 @@ def check_accuracy(dataset):
         test_accuracy = 100.*correct/len(dataset.dataset)
         #print("test loss = {} , percentage of correct answers = {}".format(test_loss,100.*correct/len(dataset.dataset)))
     return test_accuracy, np.mean(test_losses)
-net = networks.trajectory_classifier_dropout2(p_conv = 0.2, p_fc = 0.5, max_depth = 512)
+net = networks.conv1d_classifier_(input_dim = [9,1000,0], output_size = 10, p_conv=0.1, p_fc = 0.5, 
+                 max_depth = 256, num_layers = 5, repeating_block_depth = 0, 
+                 repeating_block_size = 0,stride = [3,1,1,1,1], kernel = 5, padding = 0,
+                 pooling = [1,2,2,2,2])
+#net = networks.trajectory_classifier_dropout2(max_depth = 256)
+print(net)
 print('defined network')
 optimizer = optim.Adam(net.parameters(), lr=3e-3)
 loss_func = nn.CrossEntropyLoss()
-epochs = 300
+epochs = 30
 batch_size = 1000
 bar = pyprind.ProgBar(len(train)/batch_size*epochs, monitor = True)
 dataloader = torch.utils.data.DataLoader(train,  batch_size = batch_size, shuffle = True)
@@ -47,9 +52,7 @@ test_loader = torch.utils.data.DataLoader(test,  batch_size = len(test), shuffle
 test_accuracies = []
 train_accuracies = []
 for i in range(epochs):
-    test_accur, _ = check_accuracy(test_loader)
-    test_accuracies.append(test_accur)
-    net.train()
+    
     #print('Starting Epoch Number {}'.format(i+1))
     batch_loss = []
     correct = 0
@@ -63,17 +66,19 @@ for i in range(epochs):
         batch_loss.append(loss.item())
         pred = output.data.max(1, keepdim = True)[1]
         correct += pred.eq(target.data.view_as(pred)).sum()
+
     if i%5==0:
         print('')
         print('Epoch number {}'.format(i))
         print('Loss is {}'.format(np.mean(batch_loss)))
-        print('Training Accuracy is:')
         train_accur, _ = check_accuracy(dataloader)
-        print(train_accur)
+        train_accuracies.append(train_accur)
+        test_accur, _ = check_accuracy(test_loader)
+        test_accuracies.append(test_accur)
+        net.train()
+        print('Training Accuracy is: {}'.format(train_accur))
         print('Test Accuracy is: {}'.format(test_accur))
-    
-    train_accuracy = 100.*correct/len(dataloader.dataset)  
-    train_accuracies.append(train_accuracy)
+
     train_loss.append(np.mean(batch_loss))
 
 print('Training Accuracy is:')
