@@ -28,23 +28,23 @@ sys.path.append('/home/michael/Documents/Scxript/torchsample-master/torchsample/
 
 cwd = os.getcwd()
 
-def conv_block_calculator(input_w, input_h = None, kernel = 5, stride = 0, padding = 0, pooling = 0):
-    if ~input_h:
+def conv1d_block_calculator(input_w, input_h = None, kernel = 5, stride = 0, padding = 0, pooling = 0):
+    if not input_h:
         input_h = input_w
     dim_w = ((input_w + 2*padding - (kernel-1)-1)/stride) + 1
     dim_h = ((input_h + 2*padding - (kernel-1)-1)/stride) + 1
     if pooling:
         dim_w /=pooling
         dim_h /=pooling
-    return dim_w, dim_h
+    return np.floor(dim_w), np.floor(dim_h) 
 
 def create_train_test(dr = cwd):
-    with open(cwd+'/mnist_padded_act_full/mnist_padded_act_full1.pkl', 'rb') as f:
+    with open(cwd+'mnist_padded_act_full1.pkl', 'rb') as f:
         # The protocol version used is detected automatically, so we do not
         # have to specify it.
         data1 = pickle.load(f)
     
-    with open(cwd+'/mnist_padded_act_full/mnist_padded_act_full2.pkl', 'rb') as f:
+    with open(cwd+'mnist_padded_act_full2.pkl', 'rb') as f:
         # The protocol version used is detected automatically, so we do not
         # have to specify it.
         data2 = pickle.load(f)
