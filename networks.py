@@ -410,10 +410,12 @@ class conv1d_classifier_(nn.Module):
             stride = np.ones(num_layers)*stride
             stride = stride.astype(int).tolist()
         else:
-            if len(stride) < num_layers:
-                print('stride should be an integar or a num_layers list taking first element only')
-                stride = np.ones(num_layers)*stride[0]
-                stride = stride.astype(int).tolist()
+            if len(stride) < num_layers + repeating_block_size:
+                #print('stride should be an integar or a num_layers list taking first element only')
+                self.stride = np.ones(num_layers + repeating_block_size)*stride[-1]
+                self.stride = self.stride.astype(int).tolist()
+                for i in range(len(stride)):
+                    self.stride[i] = stride[i]
         if type(kernel) == int:
             kernel = np.ones(num_layers)*kernel
             kernel = kernel.astype(int).tolist()
@@ -442,29 +444,30 @@ class conv1d_classifier_(nn.Module):
             #Make sure there is no 0 in the pooling arrays.
             if 0 in pooling:
                 pooling[pooling.index(0)] = 1
-            self.pooling_array = np.ones(num_layers+repeating_block_size).astype(int).tolist()
+            self.pooling_array = np.ones(num_layers+repeating_block_size)*pooling[-1]
+            self.pooling_array = self.pooling_array.astype(int).tolist()
             for pool in range(len(pooling)):
                 self.pooling_array[pool] = pooling[pool]
         
-        print(stride)       
+        #print(self.stride)       
         #Now to define the conv layers: 
         dim = []
         self.conv_layers = nn.ModuleList()
         dim_w = input_dim[1]
         for i in range(num_layers):
             dim_w_old = dim_w
-            dim_w, _ = utils.conv1d_block_calculator(input_w = dim_w, kernel = kernel[i], stride = stride[i], padding = padding[i], pooling = self.pooling_array[i])
+            dim_w, _ = utils.conv1d_block_calculator(input_w = dim_w, kernel = kernel[i], stride = self.stride[i], padding = padding[i], pooling = self.pooling_array[i])
             #dim.append(dim_w)
             new_padding = 0
             #making sure the minimal size of dim_w is 4 or greater
             if dim_w < 4:
                 while dim_w < 4:
                     new_padding += 1
-                    dim_w, _ = utils.conv1d_block_calculator(input_w = dim_w_old, kernel = kernel[i], stride = stride[i], padding = new_padding, pooling = self.pooling_array[i])
+                    dim_w, _ = utils.conv1d_block_calculator(input_w = dim_w_old, kernel = kernel[i], stride = self.stride[i], padding = new_padding, pooling = self.pooling_array[i])
                     
-                self.conv_layers.append(nn.Conv1d(conv_depth_array[i],conv_depth_array[i+1],kernel[i], stride = stride[i], padding = new_padding))
+                self.conv_layers.append(nn.Conv1d(conv_depth_array[i],conv_depth_array[i+1],kernel[i], stride = self.stride[i], padding = new_padding))
             else:
-                self.conv_layers.append(nn.Conv1d(conv_depth_array[i],conv_depth_array[i+1],kernel[i], stride = stride[i], padding = padding[i]))
+                self.conv_layers.append(nn.Conv1d(conv_depth_array[i],conv_depth_array[i+1],kernel[i], stride = self.stride[i], padding = padding[i]))
              
             dim.append(dim_w)
             new_padding = 0
@@ -473,18 +476,18 @@ class conv1d_classifier_(nn.Module):
             if i == repeating_block_depth - 1:
                 
                 dim_w_old = dim_w
-                dim_w, _ = utils.conv1d_block_calculator(input_w = dim_w_old, kernel = kernel[i], stride = stride[i], padding = new_padding, pooling = self.pooling_array[i])
+                dim_w, _ = utils.conv1d_block_calculator(input_w = dim_w_old, kernel = kernel[i], stride = self.stride[i], padding = new_padding, pooling = self.pooling_array[i])
                
                 while dim_w_old != dim_w:
                     
                     new_padding += 1
-                    dim_w, _ = utils.conv1d_block_calculator(input_w = dim_w_old, kernel = kernel[i], stride = stride[i], padding = new_padding, pooling = self.pooling_array[i])
+                    dim_w, _ = utils.conv1d_block_calculator(input_w = dim_w_old, kernel = kernel[i], stride = self.stride[i], padding = new_padding, pooling = self.pooling_array[i])
 
-                print(new_padding)
+                #print(new_padding)
                 for j in range(repeating_block_size):
-                    self.conv_layers.append(nn.Conv1d(conv_depth_array[i+1],conv_depth_array[i+1],kernel[i], stride = stride[i], padding = new_padding))
+                    self.conv_layers.append(nn.Conv1d(conv_depth_array[i+1],conv_depth_array[i+1],kernel[i], stride = self.stride[i], padding = new_padding))
                     
-        
+        #print(dim)
         self.final_conv_dim = dim_w.astype(int)
         self.fc_first_size = self.final_conv_dim*conv_depth_array[-1]
 
@@ -517,7 +520,6 @@ class conv1d_classifier_(nn.Module):
                 drop = self.conv_drop[idx]
                 pool = nn.MaxPool1d(self.pooling_array[idx])
                 x = pool(self.relu(drop(conv_layer(x))))
-                
         else:
             for idx, conv_layer in enumerate(self.conv_layers):
                 bNorm = self.conv_batchNorm[idx]
