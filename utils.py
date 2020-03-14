@@ -39,12 +39,12 @@ def conv1d_block_calculator(input_w, input_h = None, kernel = 5, stride = 0, pad
     return np.floor(dim_w), np.floor(dim_h) 
 
 def create_train_test(dr = cwd):
-    with open(cwd+'mnist_padded_act_full1.pkl', 'rb') as f:
+    with open(cwd+'/mnist_padded_act_full1.pkl', 'rb') as f:
         # The protocol version used is detected automatically, so we do not
         # have to specify it.
         data1 = pickle.load(f)
     
-    with open(cwd+'mnist_padded_act_full2.pkl', 'rb') as f:
+    with open(cwd+'/mnist_padded_act_full2.pkl', 'rb') as f:
         # The protocol version used is detected automatically, so we do not
         # have to specify it.
         data2 = pickle.load(f)
