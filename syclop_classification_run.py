@@ -113,7 +113,7 @@ print('defined network')
 loss_func = nn.CrossEntropyLoss()
 
 
-bar = pyprind.ProgBar(len(train)/batch_size*epochs, monitor = True)
+#bar = pyprind.ProgBar(len(train)/batch_size*epochs, monitor = True)
 dataloader = torch.utils.data.DataLoader(train,  batch_size = batch_size, shuffle = True)
 train_loss = []
 test_loader = torch.utils.data.DataLoader(test,  batch_size = len(test), shuffle = True)
@@ -130,11 +130,11 @@ for i in range(epochs):
         loss = loss_func(output, target)
         loss.backward()
         optimizer.step()
-        bar.update()
+        #bar.update()
         batch_loss.append(loss.item())
         pred = output.data.max(1, keepdim = True)[1]
         correct += pred.eq(target.data.view_as(pred)).sum()
-
+    
     if i%5==0:
         print('')
         print('Epoch number {}'.format(i))
