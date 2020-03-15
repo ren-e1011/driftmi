@@ -42,7 +42,7 @@ print(net)
 print('defined network')
 optimizer = optim.Adam(net.parameters(), lr=3e-3)
 loss_func = nn.CrossEntropyLoss()
-epochs = 30
+epochs = 150
 batch_size = 1000
 bar = pyprind.ProgBar(len(train)/batch_size*epochs, monitor = True)
 dataloader = torch.utils.data.DataLoader(train,  batch_size = batch_size, shuffle = True)

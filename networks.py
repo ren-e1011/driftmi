@@ -407,8 +407,8 @@ class conv1d_classifier_(nn.Module):
         self.p_fc = p_fc
         conv_depth_array = np.linspace(input_dim[0],max_depth, num_layers+1).astype(int)
         if type(stride) == int:
-            stride = np.ones(num_layers)*stride
-            stride = stride.astype(int).tolist()
+            self.stride = np.ones(num_layers)*stride
+            self.stride = self.stride.astype(int).tolist()
         else:
             if len(stride) < num_layers + repeating_block_size:
                 #print('stride should be an integar or a num_layers list taking first element only')
@@ -416,6 +416,8 @@ class conv1d_classifier_(nn.Module):
                 self.stride = self.stride.astype(int).tolist()
                 for i in range(len(stride)):
                     self.stride[i] = stride[i]
+            else:
+                self.stride = stride
         if type(kernel) == int:
             kernel = np.ones(num_layers)*kernel
             kernel = kernel.astype(int).tolist()
