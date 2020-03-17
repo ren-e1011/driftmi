@@ -2,5 +2,6 @@
 #BSUB -J example
 #BSUB -o example-%J.o
 #BSUB -e example-%J.e
-python3.7 syclop_classification_run.py 2 0.003 1000 10 0 0.5 0.1 5 [3 1 1 1 1] [1 2 2 2 2] 256 5 0 0 0
+bsub  -R "select[mem>4096] rusage[mem=4000]" <nana.job
+python syclop_classification_run.py 2 0.003 1000 10 0 0.5 0.1 5 [3,1,1,1,1] [1,2,2,2,2] 256 5 0 0 0
  
