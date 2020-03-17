@@ -13,6 +13,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 import torchvision
+import copy
 import pyprind
 
 import numpy as np
@@ -58,7 +59,7 @@ def create_train_test(dr = cwd):
     data1 = []
     data2 = []
     
-    k = int(len(dataset)*0.09)
+    k = 0.1 #size of test set
     train, test = sampleFromClass(dataset,k)
     return train, test
 
@@ -72,11 +73,16 @@ def sampleFromClass(ds, k):
     train_label = []
     test_data = []
     test_label = []
+    unique, count = np.unique(ds.targets.numpy(), return_counts = True)
+    count_dict = {}
+    for i in range(len(unique)):
+        count_dict[i] = count[i]*(1-k)
+        
     for data, label in ds:
         
         c = label.item()
         class_counts[c] = class_counts.get(c, 0) + 1
-        if class_counts[c] <= k:
+        if class_counts[c] < count_dict[i]:
             train_data.append(data)
             train_label.append(torch.unsqueeze(label, 0))
         else:
@@ -96,17 +102,18 @@ def sampleFromClass(ds, k):
 class one_hot_dataset(Dataset):
     def __init__(self, traject_data, nb_digits = 9):
         
-        self.labels = torch.tensor(traject_data[1])
+        self.targets = torch.tensor(traject_data[1])
         self.orig_data = traject_data[0]
-        self.dataset = []
+        self.data = []
         bar = pyprind.ProgBar(len(self.orig_data),monitor = True)
         for i in range(len(self.orig_data)):
-            self.dataset.append(one_hot(self.orig_data[i]).transpose(0,1))
+            self.data.append(one_hot(self.orig_data[i]).transpose(0,1))
             bar.update()
-        self.dataset = torch.stack(self.dataset)
+        self.data = torch.stack(self.data)
+        
         
     def __len__(self):
-        return len(self.dataset)
+        return len(self.data)
     
     def __getitem__(self, idx):
         '''
@@ -114,15 +121,15 @@ class one_hot_dataset(Dataset):
         
         returns: tuple(trajectory, label)
         '''
-        trajectory = self.dataset[idx]
-        label = self.labels[idx]
+        trajectory = self.data[idx]
+        label = self.targets[idx]
         
         return trajectory, label
     
-    def data(self):
-        return self.dataset
-    def targets(self):
-        return self.labels
+    def dataset(self):
+        return self.data
+    def labels(self):
+        return self.targets
     
 
 def one_hot(input_data, nb_digits = 9):
@@ -139,22 +146,141 @@ def one_hot(input_data, nb_digits = 9):
     return y_onehot 
 
 
-
+def traject_one_hot():
+    with open(cwd+'/mnist_padded_act_full1.pkl', 'rb') as f:
+        # The protocol version used is detected automatically, so we do not
+        # have to specify it.
+        data1 = pickle.load(f)
+    
+    with open(cwd+'/mnist_padded_act_full2.pkl', 'rb') as f:
+        # The protocol version used is detected automatically, so we do not
+        # have to specify it.
+        data2 = pickle.load(f)
+    
+    
+    data = data1[0] + data2[0]
+    labels = data1[1] + data2[1][:len(data2[0])]
+    dataset = [data,labels]
+    dataset = one_hot_dataset(dataset)
+    
+    return dataset
 #Build Dataset of trajectories and MNIST
 #Checked and the trajectories order is the same as the data set. 
+class MNIST_TRAJECT_MINE(Dataset):
+    def __init__(self, transform = None):
+        
+        train = True
+        self.transform = transform
+        
+        #Creating trajectory, marginal_mnist and joint_mnist disterbution datasets for MINE
+        #Example for an instance: 
+        #trajectory:label=3, joint:label=3(different image), marginal:label=5(or other not 3)
+        
+        trajectory_dataset = traject_one_hot()
+        
+        for i in range(10):
 
+            #temp_traject = copy.deepcopy(trajectory_dataset.targets)
+            mnist_dataset = torchvision.datasets.MNIST(os.getcwd(),
+                    train = train, download = True)
+                    
+            #creating the main data set arranged by the label, shuffle SHOULD 
+            #be done while calling dataloader.
+            idx = trajectory_dataset.targets==i
+            temp_targets = trajectory_dataset.targets[idx]
+            temp_data = trajectory_dataset.data[idx]
+            if i == 0:
+                self.traject_data = temp_data
+                self.traject_targets = temp_targets
+            else:
+                self.traject_data = torch.utils.data.ConcatDataset([self.traject_data, temp_data])
+                self.traject_targets = torch.utils.data.ConcatDataset([self.traject_targets, temp_targets])
+              
+            #Creating marginal dataset, i.e. a random image drown from the pool
+            idx = np.random.randint(0,len(mnist_dataset),len(temp_targets))
+            marginal_temp = torchvision.datasets.MNIST(os.getcwd(),train = train, download = True)
+            marginal_temp.targets = mnist_dataset.targets[idx]
+            marginal_temp.data = mnist_dataset.data[idx]
+            if i == 0:
+                self.marginal_data = marginal_temp.data
+                self.marginal_targets = marginal_temp.targets
+            else:
+                self.marginal_data = torch.utils.data.ConcatDataset([self.marginal_data, marginal_temp.data])
+                self.marginal_targets = torch.utils.data.ConcatDataset([self.marginal_targets, marginal_temp.targets])
+            
+            #Creating a joint disterbution dataset, i.e. same label different
+            #image 
+            idx = mnist_dataset.targets==i
+            mnist_dataset.targets = mnist_dataset.targets[idx]
+            mnist_dataset.data = mnist_dataset.data[idx]
+            idx = torch.randperm(len(mnist_dataset))
+            mnist_dataset.targets = mnist_dataset.targets[idx]
+            mnist_dataset.data = mnist_dataset.data[idx]
+            if i == 0:
+                self.sec_data = mnist_dataset.data
+                self.sec_targets = mnist_dataset.targets
+            else:
+                self.sec_data = torch.utils.data.ConcatDataset([self.sec_data, mnist_dataset.data])
+                self.sec_targets = torch.utils.data.ConcatDataset([self.sec_targets, mnist_dataset.targets])
+            
+                
+           
+                   
+    
+    def __len__(self):
+        return len(self.traject_data)
+    
+    def __getitem__(self, idx):
+        '''
+        args idx (int) :  index
+        
+        returns: tuple(main_data, main_target, sec_joint, sec_joint_target, sec_matginal, sec_marginal_target)
+        '''
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+            
+        main_data = self.main_data[idx]
+        main_targets = self.main_targets[idx]
+        
+        sec_joint_data = self.sec_data[idx]
+        sec_joint_targets = self.sec_targets[idx]
+        
+        sec_marginal_data = self.marginal_data[idx]
+        sec_marginal_targets = self.marginal_targets[idx]
+            
+        
+        if self.transform is not None:
+            main_data = self.transform(main_data)
+            sec_joint_data = self.transform(sec_joint_data)
+            sec_marginal_data = self.transform(sec_marginal_data)
+            
+        
+
+        return main_data, main_targets, sec_joint_data, sec_joint_targets, sec_marginal_data, sec_marginal_targets
+    
+    def targets(self):
+        return self.main_targets, self.sec_targets, self.marginal_targets
+    
+    def data(self):
+        return self.main_data, self.sec_data, self.marginal_data
+    
+    
 class MNIST_for_MINE(Dataset):
     def __init__(self, train = False, transform = None):
         
         self.transform = transform
         
+        #Creating main, marginal and joint disterbution datasets for MINE
+        #Example for an instance: 
+        #main:label=3, joint:label=3(different image), marginal:label=5(or other not 3)
         for i in range(10):
             main_dataset = torchvision.datasets.MNIST(os.getcwd(),
                     train = train,download = True)
             sec_dataset = torchvision.datasets.MNIST(os.getcwd(),
                     train = train, download = True)
                     
-            
+            #creating the main data set arranged by the label, shuffle SHOULD 
+            #be done while calling dataloader.
             idx = main_dataset.targets==i
             main_dataset.targets = main_dataset.targets[idx]
             main_dataset.data = main_dataset.data[idx]
@@ -165,6 +291,7 @@ class MNIST_for_MINE(Dataset):
                 self.main_data = torch.utils.data.ConcatDataset([self.main_data, main_dataset.data])
                 self.main_targets = torch.utils.data.ConcatDataset([self.main_targets, main_dataset.targets])
               
+            #Creating marginal dataset, i.e. a random image drown from the pool
             idx = np.random.randint(0,len(sec_dataset),len(main_dataset))
             marginal_temp = torchvision.datasets.MNIST(os.getcwd(),train = train, download = True)
             marginal_temp.targets = sec_dataset.targets[idx]
@@ -176,7 +303,8 @@ class MNIST_for_MINE(Dataset):
                 self.marginal_data = torch.utils.data.ConcatDataset([self.marginal_data, marginal_temp.data])
                 self.marginal_targets = torch.utils.data.ConcatDataset([self.marginal_targets, marginal_temp.targets])
             
-            
+            #Creating a joint disterbution dataset, i.e. same label different
+            #image 
             idx = sec_dataset.targets==i
             sec_dataset.targets = sec_dataset.targets[idx]
             sec_dataset.data = sec_dataset.data[idx]
