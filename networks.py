@@ -401,8 +401,12 @@ class conv1d_classifier_(nn.Module):
             
         
         '''
-        
-        
+        length_net = num_layers+repeating_block_size
+        if len(stride) > length_net:
+            stride = stride[:length_net]
+        if len(pooling) > length_net:
+            pooling = pooling[:length_net]
+            
         self.p_conv = p_conv
         self.p_fc = p_fc
         conv_depth_array = np.linspace(input_dim[0],max_depth, num_layers+1).astype(int)

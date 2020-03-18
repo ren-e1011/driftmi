@@ -2,4 +2,4 @@
 #BSUB -J example
 #BSUB -o example-%J.o
 #BSUB -e example-%J.e
-python mine_run.py 2 3e-3 1600 901 1 3 2 0 512 
+python mine_run.py 2 3e-3 1600 20 1 3 2 0 512 

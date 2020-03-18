@@ -12,8 +12,10 @@ import torchvision
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-
+import pickle
 import pyprind
+
+
 import networks
 import utils
 
@@ -33,17 +35,30 @@ def check_accuracy(dataset):
         test_accuracy = 100.*correct/len(dataset.dataset)
         #print("test loss = {} , percentage of correct answers = {}".format(test_loss,100.*correct/len(dataset.dataset)))
     return test_accuracy, np.mean(test_losses)
+
+max_depth = 256
+num_layers = 5
+stride = 2
+kernel = 5
 net = networks.conv1d_classifier_(input_dim = [9,1000,0], output_size = 10, p_conv=0.1, p_fc = 0.5, 
-                 max_depth = 256, num_layers = 5, repeating_block_depth = 0, 
-                 repeating_block_size = 0,stride = [3,1,1,1,1], kernel = 5, padding = 0,
-                 pooling = [1,2,2,2,2])
+                 max_depth = max_depth, num_layers = num_layers, repeating_block_depth = 0, 
+                 repeating_block_size = 0,stride = [stride,1,1], kernel = kernel, padding = 0,
+                 pooling = [2,2,2])
+#Best 0.1 0.5 256 5 0 0 [2,1,1] pooling -[1,2,2] kernel - 5 
+#overfit early:  0.1 0.5 256 5 0 0 stride - [1,1,1] pooling -[2,2,2] kernel - 3 
+#overfit, reaches 84% 0.1 0.5 256 5 0 0 stride - [1,1,1] pooling -[2,2,2] kernel - 5
+#8 layers not better
+#kernel 3 stride 5 not better
+#
+#512?
+
 #net = networks.trajectory_classifier_dropout2(max_depth = 256)
 print(net)
 print('defined network')
-optimizer = optim.Adam(net.parameters(), lr=3e-3)
+optimizer = optim.RMSprop(net.parameters(), lr=3e-3)
 loss_func = nn.CrossEntropyLoss()
 epochs = 150
-batch_size = 1000
+batch_size = 500
 bar = pyprind.ProgBar(len(train)/batch_size*epochs, monitor = True)
 dataloader = torch.utils.data.DataLoader(train,  batch_size = batch_size, shuffle = True)
 train_loss = []
@@ -97,6 +112,10 @@ plt.xlabel('Epochs')
 plt.ylabel('Accuracies')
 
 
+with open('train_accuracies_{1}_{2}_{3}_{4}'.format(max_depth, num_layers, stride, kernel), 'wb') as f:
+    pickle.dump(train_accuracies)
+with open('test_accuracies_{1}_{2}_{3}_{4}'.format(max_depth, num_layers, stride, kernel), 'wb') as f:
+    pickle.dump(test_accuracies)
 
 
     

@@ -22,7 +22,7 @@ import networks
 import utils
 
 
-# sys.argv gets 4 values:
+# sys.argv gets 15 values:
 # [1] - the optimizer - one of three Adam, SGD, RMSprop
 # [2] - lr
 # [3] - batch_size

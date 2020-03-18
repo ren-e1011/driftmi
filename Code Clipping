@@ -1,0 +1,10 @@
+terminal codes:
+module load anaconda/3.7.3
+conda activate orraenv
+export OMP_NUM_THREADS=1
+scp mnist_padded_act_full1.pkl eaguest@access.wexac.weizmann.ac.il:/home/labs/ahissarlab/eaguest/
+Delete file - rm -r 
+Delete files that start with XYZ and continue differatently - rm XYZ*
+Copy file - cp -i file_name new_location
+See spacing that cause error in file - cat -v file_name_to_check
+Fix these errors - tr -d '\r' <old_file_name > fixed_file_name     
