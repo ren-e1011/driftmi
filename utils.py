@@ -14,7 +14,8 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 import torchvision
 import copy
-import pyprind
+import pandas as pd
+#import pyprind
 
 import numpy as np
 import os
@@ -38,6 +39,50 @@ def conv1d_block_calculator(input_w, input_h = None, kernel = 5, stride = 0, pad
         dim_w /=pooling
         dim_h /=pooling
     return np.floor(dim_w), np.floor(dim_h) 
+
+class create_not_onehot(Dataset):
+    def __init__(self, traject_data, nb_digits = 9):
+        with open(cwd+'/mnist_padded_act_full1.pkl', 'rb') as f:
+            # The protocol version used is detected automatically, so we do not
+            # have to specify it.
+            data1 = pickle.load(f)
+        
+        with open(cwd+'/mnist_padded_act_full2.pkl', 'rb') as f:
+            # The protocol version used is detected automatically, so we do not
+            # have to specify it.
+            data2 = pickle.load(f)
+        
+        
+        self.data = data1[0] + data2[0]
+        self.targets = data1[1] + data2[1]
+        
+        
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        '''
+        args idx (int) :  index
+        
+        returns: tuple(trajectory, label)
+        '''
+        trajectory = self.data[idx]
+        label = self.targets[idx]
+        
+        return trajectory, label
+    
+    def dataset(self):
+        return self.data
+    def labels(self):
+        return self.targets
+   
+def creat_not_hot_train():
+    
+    dataset = create_not_onehot()
+    k = 0.1    
+    train, test = sampleFromClass(dataset,k)
+    
+    return train, test
 
 def create_train_test(dr = cwd):
     with open(cwd+'/mnist_padded_act_full1.pkl', 'rb') as f:
@@ -105,10 +150,10 @@ class one_hot_dataset(Dataset):
         self.targets = torch.tensor(traject_data[1])
         self.orig_data = traject_data[0]
         self.data = []
-        bar = pyprind.ProgBar(len(self.orig_data),monitor = True)
+        #bar = pyprind.ProgBar(len(self.orig_data),monitor = True)
         for i in range(len(self.orig_data)):
             self.data.append(one_hot(self.orig_data[i]).transpose(0,1))
-            bar.update()
+            #bar.update()
         self.data = torch.stack(self.data)
         
         
@@ -152,14 +197,14 @@ def traject_one_hot():
         # have to specify it.
         data1 = pickle.load(f)
     
-    with open(cwd+'/mnist_padded_act_full2.pkl', 'rb') as f:
+    #with open(cwd+'/mnist_padded_act_full2.pkl', 'rb') as f:
         # The protocol version used is detected automatically, so we do not
         # have to specify it.
-        data2 = pickle.load(f)
+    #     data2 = pickle.load(f)
     
     
-    data = data1[0] + data2[0]
-    labels = data1[1] + data2[1][:len(data2[0])]
+    data = data1[0] #+ data2[0]
+    labels = data1[1]# + data2[1][:len(data2[0])]
     dataset = [data,labels]
     dataset = one_hot_dataset(dataset)
     
@@ -171,33 +216,50 @@ class MNIST_TRAJECT_MINE(Dataset):
         
         train = True
         self.transform = transform
-        
+        self.idx_list = []
+        self.idx_list2 = []
         #Creating trajectory, marginal_mnist and joint_mnist disterbution datasets for MINE
         #Example for an instance: 
         #trajectory:label=3, joint:label=3(different image), marginal:label=5(or other not 3)
-        
-        trajectory_dataset = traject_one_hot()
-        
+        if os.path.exists('traject_mine_set.pickle'):
+            self.traject_data = pickle.load(open('traject_mine_set.pickle','rb'))
+            self.traject_targets = pickle.load(open('traject_mine_targets.pickle', 'rb'))
+        else:
+            if os.path.exists('traject_dataset.pickle'):
+                trajectory_dataset = pickle.load(open('traject_dataset.pickle','rb'))
+            else:
+                trajectory_dataset = traject_one_hot()
         for i in range(10):
 
             #temp_traject = copy.deepcopy(trajectory_dataset.targets)
             mnist_dataset = torchvision.datasets.MNIST(os.getcwd(),
                     train = train, download = True)
-                    
+            #print(sum(mnist_dataset.targets[:len(trajectory_dataset)] == trajectory_dataset.targets))         
             #creating the main data set arranged by the label, shuffle SHOULD 
             #be done while calling dataloader.
-            idx = trajectory_dataset.targets==i
-            temp_targets = trajectory_dataset.targets[idx]
-            temp_data = trajectory_dataset.data[idx]
-            if i == 0:
-                self.traject_data = temp_data
-                self.traject_targets = temp_targets
+            if os.path.exists('traject_mine_set.pickle'):
+                pass
             else:
-                self.traject_data = torch.utils.data.ConcatDataset([self.traject_data, temp_data])
-                self.traject_targets = torch.utils.data.ConcatDataset([self.traject_targets, temp_targets])
-              
+                idx = trajectory_dataset.targets==i
+                self.idx_list.append(idx)
+                temp_targets = trajectory_dataset.targets[idx]
+                temp_data = trajectory_dataset.data[idx]
+                #print(len(temp_data))
+                if i == 0:
+                    self.traject_data = temp_data
+                    self.traject_targets = temp_targets
+                else:
+                    self.traject_data = torch.utils.data.ConcatDataset([self.traject_data, temp_data])
+                    self.traject_targets = torch.utils.data.ConcatDataset([self.traject_targets, temp_targets])
+                    
+
+            #Creating a joint disterbution dataset, i.e. same label different
+            #image 
+            sec_idx = mnist_dataset.targets==i
+            #print(sec_idx)
+            self.idx_list2.append(sec_idx)
             #Creating marginal dataset, i.e. a random image drown from the pool
-            idx = np.random.randint(0,len(mnist_dataset),len(temp_targets))
+            idx = np.random.randint(0,len(mnist_dataset),sum(sec_idx.numpy()))
             marginal_temp = torchvision.datasets.MNIST(os.getcwd(),train = train, download = True)
             marginal_temp.targets = mnist_dataset.targets[idx]
             marginal_temp.data = mnist_dataset.data[idx]
@@ -208,14 +270,11 @@ class MNIST_TRAJECT_MINE(Dataset):
                 self.marginal_data = torch.utils.data.ConcatDataset([self.marginal_data, marginal_temp.data])
                 self.marginal_targets = torch.utils.data.ConcatDataset([self.marginal_targets, marginal_temp.targets])
             
-            #Creating a joint disterbution dataset, i.e. same label different
-            #image 
-            idx = mnist_dataset.targets==i
-            mnist_dataset.targets = mnist_dataset.targets[idx]
-            mnist_dataset.data = mnist_dataset.data[idx]
-            idx = torch.randperm(len(mnist_dataset))
-            mnist_dataset.targets = mnist_dataset.targets[idx]
-            mnist_dataset.data = mnist_dataset.data[idx]
+            mnist_dataset.targets = mnist_dataset.targets[sec_idx]
+            mnist_dataset.data = mnist_dataset.data[sec_idx]
+            sec_idx = torch.randperm(len(mnist_dataset))
+            mnist_dataset.targets = mnist_dataset.targets[sec_idx]
+            mnist_dataset.data = mnist_dataset.data[sec_idx]
             if i == 0:
                 self.sec_data = mnist_dataset.data
                 self.sec_targets = mnist_dataset.targets
@@ -223,8 +282,12 @@ class MNIST_TRAJECT_MINE(Dataset):
                 self.sec_data = torch.utils.data.ConcatDataset([self.sec_data, mnist_dataset.data])
                 self.sec_targets = torch.utils.data.ConcatDataset([self.sec_targets, mnist_dataset.targets])
             
-                
-           
+                          
+            
+        with open('traject_mine_set.pickle', 'wb') as f:
+            pickle.dump(self.traject_data, f)
+        with open('traject_mine_targets.pickle', 'wb') as f:
+            pickle.dump(self.traject_targets, f)
                    
     
     def __len__(self):
@@ -239,8 +302,8 @@ class MNIST_TRAJECT_MINE(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
             
-        main_data = self.main_data[idx]
-        main_targets = self.main_targets[idx]
+        main_data = self.traject_data[idx]
+        main_targets = self.traject_targets[idx]
         
         sec_joint_data = self.sec_data[idx]
         sec_joint_targets = self.sec_targets[idx]
@@ -259,11 +322,260 @@ class MNIST_TRAJECT_MINE(Dataset):
         return main_data, main_targets, sec_joint_data, sec_joint_targets, sec_marginal_data, sec_marginal_targets
     
     def targets(self):
-        return self.main_targets, self.sec_targets, self.marginal_targets
+        return self.traject_targets, self.sec_targets, self.marginal_targets
     
     def data(self):
-        return self.main_data, self.sec_data, self.marginal_data
+        return self.traject_data, self.sec_data, self.marginal_data
     
+
+    
+class TRAJECT_MINE(Dataset):
+    def __init__(self, transform = None):
+        #Loading and manipulating the trajectory data takes alot of memory
+        #So there are different senarious to minimize memory usage
+        self.transform = transform
+        self.idx_list = []
+        self.idx_list2 = []
+        #Creating trajectory, marginal_mnist and joint_mnist disterbution datasets for MINE
+        #Example for an instance: 
+        #trajectory:label=3, joint:label=3(different image), marginal:label=5(or other not 3)
+        if os.path.exists('main_traject_MINE_data.pickle'):
+            self.traject_data = pickle.load(open('main_traject_MINE_data.pickle','rb'))
+            self.traject_targets = pickle.load(open('main_traject_MINE_targets.pickle','rb'))
+            self.traject_numbers = pickle.load(open('main_traject_MINE_numbers.pickle','rb'))
+        elif os.path.exists('traject_dataset.pickle'):
+            trajectory_dataset = pickle.load(open('traject_dataset.pickle','rb'))
+            self.traject_numbers = []
+        else:
+            trajectory_dataset = traject_one_hot()
+            print('loaded')
+        
+        for i in range(10):
+            if os.path.exists('main_traject_MINE_data.pickle'):
+                pass
+            else:
+                idx = trajectory_dataset.targets==i
+                #print(len(idx))
+                self.idx_list.append(idx)
+                temp_targets = trajectory_dataset.targets[idx]
+                temp_data = trajectory_dataset.data[idx]
+                #print(len(temp_data))
+                #print(len(temp_data))
+                if i == 0:
+                    temp_numbers = (0, len(temp_targets))
+                    self.traject_numbers.append(temp_numbers)
+                    self.traject_data = temp_data
+                    self.traject_targets = temp_targets
+                else:
+                    temp_numbers = (len(self.traject_targets), len(self.traject_targets)+len(temp_targets))
+                    self.traject_numbers.append(temp_numbers)
+                    self.traject_data = torch.utils.data.ConcatDataset([self.traject_data, temp_data])
+                    self.traject_targets = torch.utils.data.ConcatDataset([self.traject_targets, temp_targets])
+                    
+            #Creating a joint disterbution dataset, i.e. same label different
+            if os.path.exists('main_traject_MINE_data.pickle'): 
+                idx = self.traject_targets == i
+                print(i,idx)
+                joint_targets = self.traject_targets[idx]
+                joint_data = self.traject_data[idx]
+                sec_idx = torch.randperm(len(joint_targets))
+                joint_data = self.traject_data[sec_idx]
+                joint_targets = self.traject_targets[sec_idx]
+                if i == 0:
+                    self.sec_data = joint_data
+                    self.sec_targets = joint_targets
+                else:
+                    self.sec_data = torch.utils.data.ConcatDataset([self.sec_data, joint_data])
+                    self.sec_targets = torch.utils.data.ConcatDataset([self.sec_targets, joint_targets])
+            else:
+                sec_idx = torch.randperm(len(temp_targets))
+                joint_targets = temp_targets[sec_idx]
+                #print(joint_targets[50])
+                joint_data = temp_data[sec_idx]
+                #print(len(joint_data))
+                if i == 0:
+                    self.sec_data = joint_data
+                    self.sec_targets = joint_targets
+                else:
+                    self.sec_data = torch.utils.data.ConcatDataset([self.sec_data, joint_data])
+                    self.sec_targets = torch.utils.data.ConcatDataset([self.sec_targets, joint_targets])
+                    #print(len(self.sec_data))
+                
+        if not os.path.exists('main_traject_MINE_data.pickle'):
+            with open('main_traject_MINE_data.pickle', 'wb') as f:
+                pickle.dump(self.traject_data,f)
+            with open('main_traject_MINE_targets.pickle', 'wb') as f:
+                pickle.dump(self.traject_targets,f)
+            with open('main_traject_MINE_numbers.pickle', 'wb') as f:
+                pickle.dump(self.traject_numbers,f)
+        if os.path.exists('traject_marginal_data.pickle'):
+            print('marginal')
+            self.marginal_data = pickle.load(open('traject_marginal_data.pickle','rb'))
+            self.marginal_targets = pickle.load(open('trajectory_marginal_data.pickle', 'rb'))
+            idx = torch.randperm(len(self.marginal_data))
+            self.marginal_data = self.marginal_data[idx]
+            self.marginal_targets = self.marginal_targets[idx]
+            print('loaded marginal')
+        else:
+            idx = torch.randperm(len(trajectory_dataset))
+            self.marginal_data = trajectory_dataset.data[idx]
+            self.marginal_targets = trajectory_dataset.targets[idx]
+            with open('trajectory_marginal_data.pickle', 'wb') as f:
+                pickle.dump(self.marginal_data,f)
+            with open('trajectory_marginal_targets.pickle', 'wb') as f:
+                pickle.dump(self.marginal_targets, f)
+            
+            
+    def __len__(self):
+        return len(self.traject_data)
+    
+    def __getitem__(self, idx):
+        '''
+        args idx (int) :  index
+        
+        returns: tuple(main_data, main_target, sec_joint, sec_joint_target, sec_matginal, sec_marginal_target)
+        '''
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+            
+        main_data = self.traject_data[idx]
+        main_targets = self.traject_targets[idx]
+        
+        sec_joint_data = self.sec_data[idx]
+        sec_joint_targets = self.sec_targets[idx]
+        
+        sec_marginal_data = self.marginal_data[idx]
+        sec_marginal_targets = self.marginal_targets[idx]
+            
+        
+        if self.transform is not None:
+            main_data = self.transform(main_data)
+            sec_joint_data = self.transform(sec_joint_data)
+            sec_marginal_data = self.transform(sec_marginal_data)
+            
+        
+
+        return main_data, main_targets, sec_joint_data, sec_joint_targets, sec_marginal_data, sec_marginal_targets
+    
+    def targets(self):
+        return self.traject_targets, self.sec_targets, self.marginal_targets
+    
+    def data(self):
+        return self.traject_data, self.sec_data, self.marginal_data    
+
+class TRAJECT_MINE2(Dataset):
+    def __init__(self, joint = 'different', transform = None):
+        #Loading and manipulating the trajectory data takes alot of memory
+        #So there are different senarious to minimize memory usage
+        self.transform = transform
+        self.idx_list = []
+        self.idx_list2 = []
+        self.joint = joint
+        #Creating trajectory, marginal_mnist and joint_mnist disterbution datasets for MINE
+        #Example for an instance: 
+        #trajectory:label=3, joint:label=3(different image), marginal:label=5(or other not 3)
+        if os.path.exists('main_traject_MINE_data.pickle'):
+            self.traject_data = pickle.load(open('main_traject_MINE_data.pickle','rb'))
+            self.traject_targets = pickle.load(open('main_traject_MINE_targets.pickle','rb'))
+            self.traject_numbers = pickle.load(open('main_traject_MINE_numbers.pickle','rb'))
+        elif os.path.exists('traject_dataset.pickle'):
+            trajectory_dataset = pickle.load(open('traject_dataset.pickle','rb'))
+            self.traject_numbers = []
+            
+        else:
+            trajectory_dataset = traject_one_hot()
+            print('loaded')
+            self.traject_numbers = []
+        if os.path.exists('main_traject_MINE_data.pickle'):
+            pass
+        else:
+            for i in range(10):
+        
+                idx = trajectory_dataset.targets==i
+                #print(len(idx))
+                self.idx_list.append(idx)
+                temp_targets = trajectory_dataset.targets[idx]
+                temp_data = trajectory_dataset.data[idx]
+                #print(len(temp_data))
+                #print(len(temp_data))
+                if i == 0:
+                    temp_numbers = (0, len(temp_targets))
+                    self.traject_numbers.append(temp_numbers)
+                    self.traject_data = temp_data
+                    self.traject_targets = temp_targets
+                else:
+                    temp_numbers = (len(self.traject_targets), len(self.traject_targets)+len(temp_targets))
+                    self.traject_numbers.append(temp_numbers)
+                    self.traject_data = torch.utils.data.ConcatDataset([self.traject_data, temp_data])
+                    self.traject_targets = torch.utils.data.ConcatDataset([self.traject_targets, temp_targets])
+                
+                pickle.dump(self.traject_data,open('main_traject_MINE_data.pickle','wb'))
+                pickle.dump(self.traject_targets,open('main_traject_MINE_targets.pickle','wb'))
+                pickle.dump(self.traject_numbers,open('main_traject_MINE_numbers.pickle','wb'))
+                            
+        self.refresh_index()
+        
+            
+    def refresh_index(self):
+        index = np.ones([len(self.traject_data),3])
+        index = pd.DataFrame(index)
+        index.iloc[:,0] = np.arange(0,len(self.traject_data)).tolist()
+        for i in range(10):
+            #Creating joint index
+            joint_index = np.arange(self.traject_numbers[i][0],self.traject_numbers[i][1])
+            if self.joint == 'different':    
+                np.random.shuffle(joint_index)
+            index.iloc[self.traject_numbers[i][0]:self.traject_numbers[i][1],1] = joint_index.tolist()
+            #Creating marginal index
+            if i==0:
+                marginal_index = index.iloc[self.traject_numbers[i][1]:,0].to_numpy().tolist()
+            else:
+                marginal_index = index.iloc[0:self.traject_numbers[i][0],0].to_numpy().tolist()
+                
+                marginal_index = marginal_index + index.iloc[self.traject_numbers[i][1]:,0].to_numpy().tolist()
+            np.random.shuffle(marginal_index)
+            marginal_index = marginal_index[0:len(index.iloc[self.traject_numbers[i][0]:self.traject_numbers[i][1],2])]
+            index.iloc[self.traject_numbers[i][0]:self.traject_numbers[i][1],2] = marginal_index
+          
+        self.index = index.to_numpy().astype(int)
+            
+        
+    def __len__(self):
+        return len(self.traject_data)
+    
+    def __getitem__(self, idx):
+        '''
+        args idx (int) :  index
+        
+        returns: tuple(main_data, main_target, sec_joint, sec_joint_target, sec_matginal, sec_marginal_target)
+        '''
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+            
+        main_data = self.traject_data[self.index[idx,0]]
+        main_targets = self.traject_targets[self.index[idx,0]]
+        
+        sec_joint_data = self.traject_data[self.index[idx,1]]
+        sec_joint_targets = self.traject_targets[self.index[idx,1]]
+        
+        sec_marginal_data = self.traject_data[self.index[idx,2]]
+        sec_marginal_targets = self.traject_targets[self.index[idx,2]]
+            
+        
+        if self.transform is not None:
+            main_data = self.transform(main_data)
+            sec_joint_data = self.transform(sec_joint_data)
+            sec_marginal_data = self.transform(sec_marginal_data)
+            
+        
+
+        return main_data, main_targets, sec_joint_data, sec_joint_targets, sec_marginal_data, sec_marginal_targets
+    
+    def targets(self):
+        return self.traject_targets, self.sec_targets, self.marginal_targets
+    
+    def data(self):
+        return self.traject_data, self.sec_data, self.marginal_data    
     
 class MNIST_for_MINE(Dataset):
     def __init__(self, train = False, transform = None):

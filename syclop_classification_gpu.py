@@ -48,6 +48,8 @@ def check_accuracy(dataset):
     test_losses = []
     with torch.no_grad():
         for data, target in dataset:
+            data = data.to('cuda', non_blocking=True)
+            target = target.to('cuda', non_blocking=True)
             output = net(data)
             test_loss += loss_func(output, target).item()
             pred = output.data.max(1, keepdim = True)[1]
@@ -74,11 +76,11 @@ max_depth = int(sys.argv[11])
 num_layers = int(sys.argv[12])
 repeating_block_depth = int(sys.argv[13])
 repeating_block_size = int(sys.argv[14])
-data_path = str(sys.argv[15]) #
+head_kernel = list(map(int,list(sys.argv[15][1:-1].split(','))))
 #if data_path is 0 we use the cwd:
-if len(data_path) == 1:
-    data_path = os.getcwd()
-
+#if len(data_path) == 1:
+#    data_path = os.getcwd()
+data_path = os.getcwd()
 if os.path.exists('train.pickle'):
     if os.path.exists('test.pickle'):  
         print('found train.pickle')
@@ -99,10 +101,13 @@ else:
     with open('test.pickle', 'wb') as f:
         pickle.dump(test,f)
 
-net = networks.conv1d_classifier_(input_dim = [9,1000,0], output_size = 10, p_conv=p_conv, p_fc = p_fc, 
-                 max_depth = max_depth, num_layers = num_layers, repeating_block_depth = repeating_block_depth, 
-                 repeating_block_size = repeating_block_size,stride = stride, kernel = kernel, padding = 0,
-                 pooling = pooling)
+if net_num == 1:
+    net = networks.conv1d_classifier_(input_dim = [9,1000,0], output_size = 10, p_conv=p_conv, p_fc = p_fc, 
+                     max_depth = max_depth, num_layers = num_layers, repeating_block_depth = repeating_block_depth, 
+                     repeating_block_size = repeating_block_size,stride = stride, kernel = kernel, padding = 0,
+                     pooling = pooling)
+elif net_num == 2:
+    net = networks.conv1d_classifier_multi_head(kernel = head_kernel)
 print(net)
 print('cuda availble?:',torch.cuda.is_available())
 #Defining the optimizer
@@ -119,7 +124,7 @@ elif optimizer == 2:
 else:
     optimizer = optim.RMSprop(net.parameters(), lr = lr)
     print('')
-    print('Optimizer: SGD')
+    print('Optimizer: RMS')
 
 print('defined network')
 #optimizer = optim.Adam(net.parameters(), lr=3e-3)
@@ -128,7 +133,6 @@ loss_func = nn.CrossEntropyLoss()
 if torch.cuda.is_available():
     print('cuda availble')
     net.cuda()
-
 #bar = pyprind.ProgBar(len(train)/batch_size*epochs, monitor = True)
 dataloader = torch.utils.data.DataLoader(train,  batch_size = batch_size, shuffle = True)
 train_loss = []
@@ -140,6 +144,8 @@ for i in range(epochs):
     batch_loss = []
     correct = 0
     for batch_idx, (data,target) in enumerate(dataloader):
+        data = data.to('cuda', non_blocking=True)
+        target = target.to('cuda', non_blocking=True)
         optimizer.zero_grad()
         output = net(data)
         loss = loss_func(output, target)
@@ -185,21 +191,21 @@ for i in range(epochs):
 name_test= 'test_accuracies_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}_{11}_{12}_{13}'.format(sys.argv[1],
                             int(float(sys.argv[2])*10000),sys.argv[3],
                             sys.argv[4],sys.argv[5],int(float(sys.argv[6])*10),
-                            int(float(sys.argv[7]))*10,sys.argv[8],sys.argv[9],sys.argv[10],
+                            int(float(sys.argv[7])*10),sys.argv[8],sys.argv[9],sys.argv[10],
                                 sys.argv[11],sys.argv[12],sys.argv[13],sys.argv[14])
 name_train= 'train_accuracies_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}_{11}_{12}_{13}'.format(sys.argv[1],
                             int(float(sys.argv[2])*10000),sys.argv[3],
                             sys.argv[4],sys.argv[5],int(float(sys.argv[6])*10),
-                            int(float(sys.argv[7]))*10,sys.argv[8],sys.argv[9],sys.argv[10],
+                            int(float(sys.argv[7])*10),sys.argv[8],sys.argv[9],sys.argv[10],
                                 sys.argv[11],sys.argv[12],sys.argv[13],sys.argv[14])
 name_train_loss= 'train_loss_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}_{11}_{12}_{13}'.format(sys.argv[1],
                             int(float(sys.argv[2])*10000),sys.argv[3],
                             sys.argv[4],sys.argv[5],int(float(sys.argv[6])*10),
-                            int(float(sys.argv[7]))*10,sys.argv[8],sys.argv[9],sys.argv[10],
+                            int(float(sys.argv[7])*10),sys.argv[8],sys.argv[9],sys.argv[10],
                                 sys.argv[11],sys.argv[12],sys.argv[13],sys.argv[14])
-pickle.dump( test_accuracies, open( name_test, "wb" ) )
-pickle.dump( train_accuracies, open( name_train, "wb" ) )
-pickle.dump( train_loss, open( name_train_loss, "wb" ) )
+torch.save( test_accuracies, name_test)
+torch.save( train_accuracies, name_train )
+torch.save( train_loss, name_train_loss)
 #results.to_csv('results_{0}_{1}_{2}_{3}_{4}.csv'.format(sys.argv[1],int(float(sys.argv[2])*10000),sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8]))
 torch.save(net.state_dict, 'class_net_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}_{11}_{12}_{13}'.format(sys.argv[1],
                             int(float(sys.argv[2])*10000),sys.argv[3],

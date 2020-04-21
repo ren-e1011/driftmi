@@ -16,7 +16,9 @@ steps to take:
 import os
 import numpy as np
 import pandas as pd
-import pyprind
+#import pyprind
+import pickle
+
 #import matplotlib.pyplot as plt
 
 
@@ -33,20 +35,60 @@ import utils
 
 
 class MINE():
-    def __init__(self, train = True, batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=1, net_num = 1,
-                 number_descending_blocks = 3, 
-                 number_repeating_blocks=2, repeating_blockd_size=512):
+    def __init__(self, train = True,traject = True, batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=2, net_num = 3,
+                 traject_max_depth = 256, traject_num_layers = 5, traject_stride = [3,1],
+                 traject_kernel = 3, traject_padding = 0,
+                 traject_pooling = [1,2], number_descending_blocks = 3, 
+                 number_repeating_blocks=0, repeating_blockd_size=512,
+                 ):
         self.net_num = net_num
-        if self.net_num == 1:
-            self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
-        elif self.net_num == 2:
-            self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
-        else:
-            self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1,number_descending_blocks = number_descending_blocks, 
-                 number_repeating_blocks=number_repeating_blocks, repeating_blockd_size = repeating_blockd_size)
+        self.traject = traject
+         
+        self.traject_max_depth = traject_max_depth 
+        self.traject_num_layers = traject_num_layers 
+        self.traject_stride = traject_stride
+        self.traject_kernel = traject_kernel
+        self.traject_padding = traject_padding
+        self.traject_pooling = traject_pooling    
         self.number_descending_blocks = number_descending_blocks 
         self.number_repeating_blocks = number_repeating_blocks 
         self.repeating_blockd_size = repeating_blockd_size
+        #Defining the netwrok:
+        if self.traject == 'combined':
+            print('MNIST Trajectory MINE network')
+            self.net = networks.statistical_estimator(traject_max_depth = self.traject_max_depth,
+                                                      traject_num_layers = self.traject_num_layers, 
+                                                      traject_stride = self.traject_stride,
+                                                      traject_kernel = self.traject_kernel, 
+                                                      traject_padding = self.traject_padding,
+                                                      traject_pooling = self.traject_pooling, 
+                                                      number_descending_blocks=self.number_descending_blocks, 
+                                                      number_repeating_blocks = self.number_repeating_blocks, 
+                                                      repeating_blockd_size = self.repeating_blockd_size)
+        elif self.traject == 'traject':
+            print('Traject MINE network')
+            self.net = networks.conv1d_classifier_(input_dim=[18,1000,0], output_size = 1,
+                                                   p_conv = 0, p_fc = 0, 
+                                                   max_depth = self.traject_max_depth, 
+                                                   num_layers = self.traject_num_layers, 
+                                                   conv_depth_type = 'decending',
+                                                   repeating_block_depth = 5, 
+                                                   repeating_block_size = 0,
+                                                   stride = self.traject_stride, 
+                                                   kernel = self.traject_kernel, 
+                                                   padding = self.traject_padding,
+                                                   pooling = self.traject_pooling, 
+                                                   BN = False)
+        else:
+            print('MNIST MINE network')
+            if self.net_num == 1:
+                self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
+            elif self.net_num == 2:
+                self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
+            else:
+                self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1,number_descending_blocks = self.number_descending_blocks, 
+                     number_repeating_blocks=self.number_repeating_blocks, repeating_blockd_size = self.repeating_blockd_size)
+        
         #self.input1 = input1
         #self.input2 = input2
         self.lr = lr
@@ -66,18 +108,14 @@ class MINE():
             print('')
             print('Optimizer: SGD')
         
-        
-        
-    
-        self.dataset = utils.MNIST_for_MINE(train=train)
         self.train_value = train
-        self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = batch, shuffle = True)    
+        #self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = batch, shuffle = True)    
         self.batch_size = batch
         
         #self.scheduler = optim.lr_scheduler.StepLR(self.mine_net_optim, step_size=10*(len(self.dataset)/self.batch_size), gamma=gamma)
         self.gamma = gamma
-        self.scheduler2 = optim.lr_scheduler.ReduceLROnPlateau(self.mine_net_optim, mode='max', factor=0.5, patience=10, verbose=False, threshold=0.0001, threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-08)    
-        
+        #self.scheduler2 = optim.lr_scheduler.ReduceLROnPlateau(self.mine_net_optim, mode='max', factor=0.5, patience=10, verbose=False, threshold=0.0001, threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-08)    
+        self.results = []
         
         #print all variables of the system:
         print('Learning rate = {}'.format(self.lr))
@@ -90,17 +128,29 @@ class MINE():
             print('The fully connected layer to repeat - {}'.format(self.repeating_blockd_size))
         
     def restart_network(self):
-        self.dataset = utils.MNIST_for_MINE(train=self.train_value)
-        self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = self.batch_size, shuffle = True) 
-        if self.net_num == 1 :
-            self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
-        elif self.net_num == 2:
-            self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
+
+        if self.traject == 'combine':
+            print('MNIST Trajectory MINE network')
+            self.net = networks.statistical_estimator(traject_max_depth = self.traject_max_depth,
+                 traject_num_layers = self.traject_num_layers, traject_stride = self.traject_stride,
+                 traject_kernel = self.traject_kernel, traject_padding = self.traject_padding,
+                 traject_pooling = self.traject_pooling, number_descending_blocks=self.number_descending_blocks, 
+                 number_repeating_blocks = self.number_repeating_blocks, repeating_blockd_size = self.repeating_blockd_size)
+        elif self.traject == 'traject':
+            print('Traject MINE network')
+            self.net = networks.conv1d_classifier_(input_dim=[18,1000,0], output_size = 1,
+                                                   max_depth = self.traject_max_depth, 
+                                                   p_conv = 0, p_fc = 0, BN = False)
         else:
+            print('MNIST MINE network')
+            if self.net_num == 1:
+                self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
+            elif self.net_num == 2:
+                self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
+            else:
+                self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1,number_descending_blocks = self.number_descending_blocks, 
+                     number_repeating_blocks=self.number_repeating_blocks, repeating_blockd_size = self.repeating_blockd_size)
             
-            self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1,
-                                                              number_descending_blocks = self.number_descending_blocks, 
-                 number_repeating_blocks=self.number_repeating_blocks, repeating_blockd_size = self.repeating_blockd_size)
         print('')
         print('Restarted Network')
         if self.optimizer == 1:
@@ -124,8 +174,14 @@ class MINE():
             
             
     def mutual_information(self,joint1, joint2, marginal):
-        T = self.net(joint1, joint2)
-        eT = torch.exp(self.net(joint1, marginal))
+        if self.traject == 'traject':
+            obj = torch.cat((joint1,joint2),1)
+            T = self.net(obj)
+            obj2 = torch.cat((joint1, marginal),1)
+            eT = torch.exp(self.net(obj2))
+        else:
+            T = self.net(joint1, joint2)
+            eT = torch.exp(self.net(joint1, marginal))
         NIM = torch.mean(T) - torch.log(torch.mean(eT)) #The neural information measure by the Donskar-Varadhan representation
         return NIM, T, eT
 
@@ -134,6 +190,11 @@ class MINE():
         joint1 = torch.autograd.Variable(batch[0])
         joint2 = torch.autograd.Variable(batch[2])
         marginal = torch.autograd.Variable(batch[4]) #the uneven parts of the dataset are the labels 
+        if torch.cuda.is_available():
+            joint1 = joint1.to('cuda', non_blocking=True)
+            joint2 = joint2.to('cuda', non_blocking=True)
+            marginal = marginal.to('cuda', non_blocking=True)
+            self.net = self.net.cuda()
         #joint = torch.autograd.Variable(torch.FloatTensor(joint))
         #marginal = torch.autograd.Variable(torch.FloatTensor(marginal))
         
@@ -150,38 +211,56 @@ class MINE():
         autograd.backward(loss)
         self.mine_net_optim.step()
         #self.scheduler.step()
-        self.scheduler2.step(NIM)
-        
+        #self.scheduler2.step(NIM)
+        if torch.cuda.is_available():
+            NIM = NIM.cpu()
+            loss = loss.cpu()
         return NIM, loss
     
-    def train(self, epochs=1):
+    def epoch(self,num_epoch = 1):
         # data is x or y
         
         
         result = list()
-        bar = pyprind.ProgBar(len(self.dataloader)*epochs, monitor = True)
         nan = None 
         
-        for i in range(epochs):
-            self.dataset = utils.MNIST_for_MINE(train=self.train_value)
-            self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = self.batch_size, shuffle = True)    
-            temp_results = []
-            for idx, batch in enumerate(self.dataloader):
-                mi_lb, loss = self.learn_mine(batch)
-                temp_results.append(mi_lb.detach())
-                if torch.isnan(temp_results[-1]):
-                    print(temp_results[-6:-1])
-                    print('Got to NaN in epoch-{0} and batch {1}'.format(i,idx))
-                    #plt.plot(result)
-                    nan = True
-                    break
-                bar.update()
+        if self.traject == 'combined':
+            dataset = utils.MNIST_TRAJECT_MINE()
+        elif self.traject == 'traject':
+            dataset = utils.TRAJECT_MINE2()
+        else:
+            dataset = utils.MNIST_for_MINE(train=self.train_value)
+        
+        dataloader = torch.utils.data.DataLoader(dataset,  batch_size = self.batch_size, shuffle = True)    
+        #bar = pyprind.ProgBar(len(dataloader), monitor = True)
+        temp_results = []
+        for idx, batch in enumerate(dataloader):
+            NIM, loss = self.learn_mine(batch)
+            temp_results.append(NIM.detach())
+            if torch.isnan(temp_results[-1]):
+                print(temp_results[-6:-1])
+                print('Got to NaN in epoch {0} batch {1}'.format(num_epoch,idx))
+                #plt.plot(result)
+                nan = True
+                break
+            #bar.update()
+            result.append(np.mean(temp_results))
+        #result = np.mean(result)
+        return np.mean(result), nan
+    
+    def train(self,epochs = 1):
+        results = []
+        #bar = pyprind.ProgBar(epochs, monitor = True)
+        for epoch in range(epochs):
+            result, nan = self.epoch(epoch)
             if nan:
                 break
+            print('  ',result)
+            results.append(result)
+         #   bar.update()
             
-            result.append(np.mean(temp_results))
-                
-        return result
+        self.results.append(results)
+        
     
     def ma(a, window_size=100):
         return [np.mean(a[i:i+window_size]) for i in range(0,len(a)-window_size)]

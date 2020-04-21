@@ -38,12 +38,16 @@ def check_accuracy(dataset):
 
 max_depth = 256
 num_layers = 5
-stride = 2
+stride = [1,1]
 kernel = 5
+pooling = [2,2]
+'''
 net = networks.conv1d_classifier_(input_dim = [9,1000,0], output_size = 10, p_conv=0.1, p_fc = 0.5, 
-                 max_depth = max_depth, num_layers = num_layers, repeating_block_depth = 0, 
-                 repeating_block_size = 0,stride = [stride,1,1], kernel = kernel, padding = 0,
-                 pooling = [2,2,2])
+                 max_depth = max_depth, num_layers = num_layers, repeating_block_depth = 3, 
+                 repeating_block_size = 3,stride = stride, kernel = kernel, padding = 0,
+                 pooling = pooling)
+'''
+net = networks.conv1d_classifier_multi_head()
 #Best 0.1 0.5 256 5 0 0 [2,1,1] pooling -[1,2,2] kernel - 5 
 #overfit early:  0.1 0.5 256 5 0 0 stride - [1,1,1] pooling -[2,2,2] kernel - 3 
 #overfit, reaches 84% 0.1 0.5 256 5 0 0 stride - [1,1,1] pooling -[2,2,2] kernel - 5
@@ -57,7 +61,7 @@ print(net)
 print('defined network')
 optimizer = optim.RMSprop(net.parameters(), lr=3e-3)
 loss_func = nn.CrossEntropyLoss()
-epochs = 150
+epochs = 50
 batch_size = 500
 bar = pyprind.ProgBar(len(train)/batch_size*epochs, monitor = True)
 dataloader = torch.utils.data.DataLoader(train,  batch_size = batch_size, shuffle = True)
