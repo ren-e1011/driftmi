@@ -1,5 +1,0 @@
-#BSUB -J example
-#BSUB -o example-%J.o
-#BSUB -e example-%J.e
-python syclop_classification_run.py 2 0.003 1000 100 0 0.5 0.1 5 [3,1,1,1,1] [1,2,2,2,2] 256 5 0 0 0
-
