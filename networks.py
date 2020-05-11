@@ -268,7 +268,7 @@ class statistical_estimator(nn.Module):
         
         x = torch.cat((image,traject),1) 
         for idx, des_fc in enumerate(self.fc):
-            x = self.elu(des_fc(x))
+            x = self.non_linearity(des_fc(x))
         x = self.fc_last(x)
         
         return x

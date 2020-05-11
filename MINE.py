@@ -19,7 +19,7 @@ import pandas as pd
 #import pyprind
 import pickle
 
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 
 import torch
@@ -36,14 +36,15 @@ import utils
 
 class MINE():
     def __init__(self, train = True,traject = True, batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=2, net_num = 3,
-                 traject_max_depth = 256, traject_num_layers = 5, traject_stride = [3,1],
-                 traject_kernel = 3, traject_padding = 0,
+                 traject_max_depth = 512, traject_num_layers = 6, traject_stride = [3,1],
+                 traject_kernel = 5, traject_padding = 0,
                  traject_pooling = [1,2], number_descending_blocks = 3, 
                  number_repeating_blocks=0, repeating_blockd_size=512,
-                 ):
+                 dataset_status = 'same'):
         self.net_num = net_num
         self.traject = traject
-         
+        self.dataset_status = dataset_status
+        print(self.dataset_status)
         self.traject_max_depth = traject_max_depth 
         self.traject_num_layers = traject_num_layers 
         self.traject_stride = traject_stride
@@ -225,11 +226,11 @@ class MINE():
         nan = None 
         
         if self.traject == 'combined':
-            dataset = utils.MNIST_TRAJECT_MINE()
+            dataset = utils.MNIST_TRAJECT_MINE(dataset_status = self.dataset_status)
         elif self.traject == 'traject':
             dataset = utils.TRAJECT_MINE2()
         else:
-            dataset = utils.MNIST_for_MINE(train=self.train_value)
+            dataset = utils.MNIST_for_MINE(train=self.train_value, trans = None)
         
         dataloader = torch.utils.data.DataLoader(dataset,  batch_size = self.batch_size, shuffle = True)    
         #bar = pyprind.ProgBar(len(dataloader), monitor = True)
