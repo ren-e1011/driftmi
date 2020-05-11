@@ -16,7 +16,7 @@ pip install pandas
 pip install PyPrind
 
 
-Run MINE on terminal:​
+## Run MINE on terminal:​
 
 mine_run.py 2 0.003 500 200 1 2 combined 3 2 2 512 6 different​
 
@@ -48,13 +48,11 @@ divide the size by 2. max number is 7                                ​
 
 [13] - same/different minist/trajectory - to use the same image that the trajectory ran on as the joint distribution.​
 
-​
-
 An example of a run:​
 
 bsub -q gpu-short -app nvidia-gpu -env LSB_CONTAINER_IMAGE=nvcr.io/nvidia/pytorch:19.07-py3 -gpu num=4:j_exclusive=no -R "select[mem>8000] rusage[mem=8000]" -o out.%J -e err.%J python3 mine_run.py 2 0.0003 500 200 1 2 combined 3 2 2 512 6 same     ​
 
- Run Trajectories classification on terminal:​
+## Run Trajectories classification on terminal:​
 
 syclop_classification_gpu.py 2 0.003 500 150 0 0.5 0.2 5 [3,1] [1,2] 512 5 4 0 0​
 
