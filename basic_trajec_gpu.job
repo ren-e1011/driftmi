@@ -1,0 +1,6 @@
+#BSUB -q gpu-short
+#BSUB -J example
+#BSUB -o example-%J.o
+#BSUB -e example-%J.e
+bsub -q gpu-short -gpu num=2:j_exclusive=yes -R "select[mem>16096] rusage[mem=16000]" -o out.%J.o -e err.%J.e python syclop_classification_run.py 2 0.003 64 10 0 0.5 0.1 3 [3,1,1,1,1] [1,2,2,2,2] 256 5 4 0 0
+ 
