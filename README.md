@@ -16,62 +16,80 @@ pip install pandas
 pip install PyPrind
 
 
-# sys.argv gets 9 values:
+Run MINE on terminal:​
 
-[1] - the optimizer - one of three Adam, SGD, RMSprop
+mine_run.py 2 0.003 500 200 1 2 combined 3 2 2 512 6 different​
 
-[2] - lr
+sys.argv gets 13 values:​
+[1] - the optimizer - one of three (1) - SGD,(2) - Adam, (3) - RMSprop​
 
-[3] - batch_size
+[2] - lr  - the combined same option diverged when lr was 3e-3. ​
 
-[4] - epochs
+[3] - batch_size​
 
-[5] - train true/false 1/0
+[4] - epochs​
 
-[6] - Net num - 1-3
+[5] - train true/false 1/0​
 
-[7] - number_descending_blocks - i.e. how many steps should the fc networks take,starting at 2048 nodes and every step divide the size by 2. max number is 7                                
+[6] - Net num - 1-3​
 
-[8] - number_repeating_blocks - the number of times to repeat a particular layer
+[7] - traject/MNIST/combined - What form of mine to compute​
 
-[9] - repeating_blockd_size - the size of nodes of the layer to repeat (2048, 1024, 512, 128, 64, 32)
+[8] - number_descending_blocks - i.e. how many steps should the fc networks take, starting at 2048 nodes and every step 
+divide the size by 2. max number is 7                                ​
 
-For example, number_descending_blocks = 5, number_repeating_blocks = 3, and repeating_blockd_size = 512 then the net architecture will look like:
+[9] - number_repeating_blocks - the number of times to repeat a particular layer​
 
-statistical_estimator_DCGAN_3(
+[10] - repeating_blockd_size - the size of nodes of the layer to repeat​
 
-(conv1): Conv2d(1, 16, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2))
+[11] - traject_max_depth​
 
-(elu): ELU(alpha=1.0, inplace=True)
+[12] - traject_num_layers​
 
-(conv2): Conv2d(16, 32, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2))
+[13] - same/different minist/trajectory - to use the same image that the trajectory ran on as the joint distribution.​
 
-(conv3): Conv2d(32, 64, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2))
+​
 
-(conv12): Conv2d(1, 16, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2))
+An example of a run:​
 
-(conv22): Conv2d(16, 32, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2))
+bsub -q gpu-short -app nvidia-gpu -env LSB_CONTAINER_IMAGE=nvcr.io/nvidia/pytorch:19.07-py3 -gpu num=4:j_exclusive=no -R "select[mem>8000] rusage[mem=8000]" -o out.%J -e err.%J python3 mine_run.py 2 0.0003 500 200 1 2 combined 3 2 2 512 6 same     ​
 
-(conv32): Conv2d(32, 64, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2))
+ Run Trajectories classification on terminal:​
 
-(fc): ModuleList(
+syclop_classification_gpu.py 2 0.003 500 150 0 0.5 0.2 5 [3,1] [1,2] 512 5 4 0 0​
 
-(0): Linear(in_features=2048, out_features=1024, bias=True)
+sys.argv gets 15 values:​
 
-(1): Linear(in_features=1024, out_features=512, bias=True)
+ [1] - the optimizer - one of three Adam, SGD, RMSprop​
 
-(2): Linear(in_features=512, out_features=512, bias=True)
+ [2] - lr​
 
-(3): Linear(in_features=512, out_features=512, bias=True)
+ [3] - batch_size​
 
-(4): Linear(in_features=512, out_features=512, bias=True)
+ [4] - epochs​
 
-(5): Linear(in_features=256, out_features=128, bias=True)
+ [5] - Net num - 1-3​
 
-(6): Linear(in_features=128, out_features=64, bias=True)
+ [6] - Dropout fc​
 
-)
+ [7] - Dropout conv​
 
-(fc_last): Linear(in_features=64, out_features=1, bias=True)
-)
+ [8] - kernel​
 
+ [9] - stride​
+
+ [10] - pooling​
+
+ [11] - max_depth​
+
+ [12] - num_layers                           ​
+
+ [13] - reapeating_block_depth - what number in num_layers should we repeat​
+
+ [14] - repeating_block_number - how many times to repeat​
+
+ [15] - data_path - if the data is stored outside the working directory. If not sys.argv[0] should be 0​
+
+Example of a run (run with best results got 85.7 with these paremeters ):​
+
+bsub -q gpu-short -app nvidia-gpu -env LSB_CONTAINER_IMAGE=nvcr.io/nvidia/pytorch:19.07-py3 -gpu num=2:j_exclusive=no -R "select[mem>4500] rusage[mem=4500]" -o out.%J -e err.%J python3 syclop_classification_gpu.py 2 0.003 500 150 0 0.5 0.1 5 [3,1] [1,2] 128 5 4 0 0
