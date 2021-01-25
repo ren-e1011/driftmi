@@ -191,18 +191,17 @@ def one_hot(input_data, nb_digits = 9):
     return y_onehot 
 
 
-def traject_one_hot():
-    with open(cwd+'/mnist_padded_act_full1.pkl', 'rb') as f:
+def traject_one_hot(train = True):
+    if train:
+        file_name = '/mnist_padded_act_full1.pkl'
+    else:
+        file_name = '/mnist_padded_act_full2.pkl'
+    with open(cwd+ file_name, 'rb') as f:
         # The protocol version used is detected automatically, so we do not
         # have to specify it.
         data1 = pickle.load(f)
     
-    #with open(cwd+'/mnist_padded_act_full2.pkl', 'rb') as f:
-        # The protocol version used is detected automatically, so we do not
-        # have to specify it.
-    #     data2 = pickle.load(f)
-    
-    
+
     data = data1[0] #+ data2[0]
     labels = data1[1]# + data2[1][:len(data2[0])]
     dataset = [data,labels]
@@ -212,23 +211,34 @@ def traject_one_hot():
 #Build Dataset of trajectories and MNIST
 #Checked and the trajectories order is the same as the data set. 
 class MNIST_TRAJECT_MINE(Dataset):
-    def __init__(self, transform = None, dataset_status = 'same'):
+    def __init__(self, transform = None, dataset_status = 'same', train = True):
         
         train = True
         self.transform = transform
         self.idx_list = []
         self.idx_list2 = []
+        #load train or tewst data according to train = True/False, defoult set to True
+        #in the MINE main file we call only the train set and in the MINE_test_train
+        #we call both in order to compare the value of MI between the train and
+        #test sets during run.
+        if train:
+            data_file_name = 'traject_mine_set.pickle'
+            targets_file_name = 'traject_mine_targets.pickle'
+        else:
+            data_file_name = 'traject_mine_set_test.pickle'
+            targets_file_name = 'traject_mine_targets_test.pickle'
         #Creating trajectory, marginal_mnist and joint_mnist disterbution datasets for MINE
         #Example for an instance: 
         #trajectory:label=3, joint:label=3(different image), marginal:label=5(or other not 3)
-        if os.path.exists('traject_mine_set.pickle'):
-            self.traject_data = pickle.load(open('traject_mine_set.pickle','rb'))
-            self.traject_targets = pickle.load(open('traject_mine_targets.pickle', 'rb'))
+        if os.path.exists(data_file_name):
+            self.traject_data = pickle.load(open(data_file_name,'rb'))
+            self.traject_targets = pickle.load(open(targets_file_name, 'rb'))
         else:
             if os.path.exists('traject_dataset.pickle'):
                 trajectory_dataset = pickle.load(open('traject_dataset.pickle','rb'))
             else:
-                trajectory_dataset = traject_one_hot()
+                trajectory_dataset = traject_one_hot(train = train)
+                pickle.dump(open('traject_dataset.pickle','wb'))
         for i in range(10):
 
             #temp_traject = copy.deepcopy(trajectory_dataset.targets)
@@ -237,7 +247,7 @@ class MNIST_TRAJECT_MINE(Dataset):
             #print(sum(mnist_dataset.targets[:len(trajectory_dataset)] == trajectory_dataset.targets))         
             #creating the main data set arranged by the label, shuffle SHOULD 
             #be done while calling dataloader.
-            if os.path.exists('traject_mine_set.pickle'):
+            if os.path.exists(data_file_name):
                 pass
             else:
                 idx = trajectory_dataset.targets==i
@@ -284,15 +294,15 @@ class MNIST_TRAJECT_MINE(Dataset):
                 self.sec_data = torch.utils.data.ConcatDataset([self.sec_data, mnist_dataset.data])
                 self.sec_targets = torch.utils.data.ConcatDataset([self.sec_targets, mnist_dataset.targets])
             
-        '''                  
-        if os.path.exists('traject_mine_set.pickle'):
+                        
+        if os.path.exists(data_file_name):
                 pass
         else:
-            with open('traject_mine_set.pickle', 'wb') as f:
+            with open(data_file_name, 'wb') as f:
                 pickle.dump(self.traject_data, f)
-            with open('traject_mine_targets.pickle', 'wb') as f:
+            with open(targets_file_name, 'wb') as f:
                 pickle.dump(self.traject_targets, f)
-        '''            
+                
     def refresh_index(self):
         #TO BE CONTINUED!!!!!!!!!!!
         index = np.ones([len(self.traject_data),3])
