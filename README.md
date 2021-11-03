@@ -1,5 +1,5 @@
 # Syclop-MINE
-A MINE based application to assess Syclop 
+An implementation of the Mutual-Information Neural Estimator (MINE) algorithm was used to assess Syclop performance. 
 
 ## Needed packages:
 
