@@ -1,0 +1,3 @@
+[submodule "Syclop-MINE"]
+	path = Syclop-MINE
+	url = https://github.com/orram/Syclop-MINE.git
