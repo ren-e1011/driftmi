@@ -5,8 +5,8 @@ Using Mine to drew information from the
 MINE - Mutual Information Neural Estimator 
 
 steps to take:
-    1)drew two images for MINE
-    2)create joint_disterbution and marginal distribution 
+    1)draw two images for MINE
+    2)create joint_distribution and marginal distribution 
     3)repeat:
         
         
@@ -32,19 +32,18 @@ import torchvision
 import networks 
 import utils
 
-
-
+# mod added traject_input_dim and hardcoded to dimenstions ()
+# mod rm "net_num", "traject", "dataset_status"
 class MINE():
-    def __init__(self, train = True,traject = True, batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=2, net_num = 3,
+    def __init__(self, traject_input_dim=[14,300], train = True,batch = 1000, lr = 3e-3, gamma = 0.001, optimizer=2,
                  traject_max_depth = 512, traject_num_layers = 6, traject_stride = [3,1],
                  traject_kernel = 5, traject_padding = 0,
                  traject_pooling = [1,2], number_descending_blocks = 3, 
-                 number_repeating_blocks=0, repeating_blockd_size=512,
-                 dataset_status = 'same'):
-        self.net_num = net_num
-        self.traject = traject
-        self.dataset_status = dataset_status
-        print(self.dataset_status)
+                 number_repeating_blocks=0, repeating_blockd_size=512):
+        # self.net_num = net_num
+        # self.traject = traject
+        # self.dataset_status = dataset_status
+        # print(self.dataset_status)
         self.traject_max_depth = traject_max_depth 
         self.traject_num_layers = traject_num_layers 
         self.traject_stride = traject_stride
@@ -54,10 +53,11 @@ class MINE():
         self.number_descending_blocks = number_descending_blocks 
         self.number_repeating_blocks = number_repeating_blocks 
         self.repeating_blockd_size = repeating_blockd_size
-        #Defining the netwrok:
-        if self.traject == 'combined':
-            print('MNIST Trajectory MINE network')
-            self.net = networks.statistical_estimator(traject_max_depth = self.traject_max_depth,
+        # mod
+        self.traject_input_dim = traject_input_dim
+        #Defining the network:
+        self.net = networks.statistical_estimator(traject_max_depth = self.traject_max_depth,
+                                                    traject_input_dim= self.traject_input_dim,
                                                       traject_num_layers = self.traject_num_layers, 
                                                       traject_stride = self.traject_stride,
                                                       traject_kernel = self.traject_kernel, 
@@ -66,32 +66,6 @@ class MINE():
                                                       number_descending_blocks=self.number_descending_blocks, 
                                                       number_repeating_blocks = self.number_repeating_blocks, 
                                                       repeating_blockd_size = self.repeating_blockd_size)
-        elif self.traject == 'traject':
-            print('Traject MINE network')
-            self.net = networks.conv1d_classifier_(input_dim=[18,1000,0], output_size = 1,
-                                                   p_conv = 0, p_fc = 0, 
-                                                   max_depth = self.traject_max_depth, 
-                                                   num_layers = self.traject_num_layers, 
-                                                   conv_depth_type = 'decending',
-                                                   repeating_block_depth = 5, 
-                                                   repeating_block_size = 0,
-                                                   stride = self.traject_stride, 
-                                                   kernel = self.traject_kernel, 
-                                                   padding = self.traject_padding,
-                                                   pooling = self.traject_pooling, 
-                                                   BN = False)
-        else:
-            print('MNIST MINE network')
-            if self.net_num == 1:
-                self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
-            elif self.net_num == 2:
-                self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
-            else:
-                self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1,number_descending_blocks = self.number_descending_blocks, 
-                     number_repeating_blocks=self.number_repeating_blocks, repeating_blockd_size = self.repeating_blockd_size)
-        
-        #self.input1 = input1
-        #self.input2 = input2
         self.lr = lr
         self.optimizer = optimizer
         if type(optimizer) != int:
@@ -108,7 +82,7 @@ class MINE():
             self.mine_net_optim = optim.RMSprop(self.net.parameters(), lr = self.lr)
             print('')
             print('Optimizer: SGD')
-        
+        #MOD TODO train/test
         self.train_value = train
         #self.dataloader = torch.utils.data.DataLoader(self.dataset,  batch_size = batch, shuffle = True)    
         self.batch_size = batch
@@ -130,29 +104,11 @@ class MINE():
         
     def restart_network(self):
 
-        if self.traject == 'combine':
-            print('MNIST Trajectory MINE network')
-            self.net = networks.statistical_estimator(traject_max_depth = self.traject_max_depth,
-                 traject_num_layers = self.traject_num_layers, traject_stride = self.traject_stride,
-                 traject_kernel = self.traject_kernel, traject_padding = self.traject_padding,
-                 traject_pooling = self.traject_pooling, number_descending_blocks=self.number_descending_blocks, 
-                 number_repeating_blocks = self.number_repeating_blocks, repeating_blockd_size = self.repeating_blockd_size)
-        elif self.traject == 'traject':
-            print('Traject MINE network')
-            self.net = networks.conv1d_classifier_(input_dim=[18,1000,0], output_size = 1,
-                                                   max_depth = self.traject_max_depth, 
-                                                   p_conv = 0, p_fc = 0, BN = False)
-        else:
-            print('MNIST MINE network')
-            if self.net_num == 1:
-                self.net = networks.statistical_estimator_DCGAN(input_size = 2, output_size = 1)
-            elif self.net_num == 2:
-                self.net = networks.statistical_estimator_DCGAN_2(input_size = 1, output_size = 1)
-            else:
-                self.net = networks.statistical_estimator_DCGAN_3(input_size = 1, output_size = 1,number_descending_blocks = self.number_descending_blocks, 
-                     number_repeating_blocks=self.number_repeating_blocks, repeating_blockd_size = self.repeating_blockd_size)
-            
-        print('')
+        self.net = networks.statistical_estimator(traject_max_depth = self.traject_max_depth,
+                traject_num_layers = self.traject_num_layers, traject_stride = self.traject_stride,
+                traject_kernel = self.traject_kernel, traject_padding = self.traject_padding,
+                traject_pooling = self.traject_pooling, number_descending_blocks=self.number_descending_blocks, 
+                number_repeating_blocks = self.number_repeating_blocks, repeating_blockd_size = self.repeating_blockd_size)
         print('Restarted Network')
         if self.optimizer == 1:
             self.mine_net_optim = optim.SGD(self.net.parameters(), lr = self.lr)
@@ -167,12 +123,7 @@ class MINE():
         print('Learning rate = {}'.format(self.lr))
         print('Batch size = {}'.format(self.batch_size))
         #print('Gamma of lr decay = {}'.format(self.gamma))
-        print('Using Net {}'.format(self.net_num))
-        if self.net_num == 3:
-            print('Number of Descending Blocks is {}'.format(self.number_descending_blocks))
-            print('Number of times to repeat a block = {}'.format(self.number_repeating_blocks))
-            print('The fully connected layer to repeat - {}'.format(self.repeating_blockd_size))
-            
+       
             
     def mutual_information(self,joint1, joint2, marginal):
         if self.traject == 'traject':
@@ -265,8 +216,3 @@ class MINE():
     
     def ma(a, window_size=100):
         return [np.mean(a[i:i+window_size]) for i in range(0,len(a)-window_size)]
-
-
-        
-    
-
