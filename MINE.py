@@ -31,6 +31,8 @@ import torchvision
 
 import networks 
 import utils
+import FullDriftDataset
+
 
 # mod added traject_input_dim and hardcoded to dimenstions ()
 # mod rm "net_num", "traject", "dataset_status"
@@ -103,7 +105,6 @@ class MINE():
             print('The fully connected layer to repeat - {}'.format(self.repeating_blockd_size))
         
     def restart_network(self):
-
         self.net = networks.statistical_estimator(traject_max_depth = self.traject_max_depth,
                 traject_num_layers = self.traject_num_layers, traject_stride = self.traject_stride,
                 traject_kernel = self.traject_kernel, traject_padding = self.traject_padding,
@@ -136,6 +137,9 @@ class MINE():
             eT = torch.exp(self.net(joint1, marginal))
         NIM = torch.mean(T) - torch.log(torch.mean(eT)) #The neural information measure by the Donskar-Varadhan representation
         return NIM, T, eT
+# MOD
+    # def val_mine(self, batch):
+
 
     def learn_mine(self,batch, ma_rate=0.01):
         # batch is a tuple of (joint1, joint2, marginal (from the dataset of joint 2))
@@ -164,25 +168,18 @@ class MINE():
         self.mine_net_optim.step()
         #self.scheduler.step()
         #self.scheduler2.step(NIM)
+        # if cuda, why put it on the cpu?
         if torch.cuda.is_available():
             NIM = NIM.cpu()
             loss = loss.cpu()
         return NIM, loss
-    
-    def epoch(self,num_epoch = 1):
+    # mod insert ix_selection
+    def epoch(self,ix_selection,num_epoch = 1):
         # data is x or y
-        
-        
         result = list()
         nan = None 
         
-        if self.traject == 'combined':
-            dataset = utils.MNIST_TRAJECT_MINE(dataset_status = self.dataset_status)
-        elif self.traject == 'traject':
-            dataset = utils.TRAJECT_MINE2()
-        else:
-            dataset = utils.MNIST_for_MINE(train=self.train_value, trans = None)
-        
+        dataset = FullDriftDataset.FullDataset(ix_dict=ix_selection)
         dataloader = torch.utils.data.DataLoader(dataset,  batch_size = self.batch_size, shuffle = True)    
         #bar = pyprind.ProgBar(len(dataloader), monitor = True)
         temp_results = []

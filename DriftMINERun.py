@@ -40,6 +40,7 @@ part_set = set([_dir for _dir in os.listdir(BASE_PATH) if not _dir.startswith(".
 exclude_set = set(['DL','OL','SM'])
 PART_LIST = list(part_set - exclude_set)
 PART_LIST = [p for p in PART_LIST if 'try' not in p.lower()]
+
 # 300 observations per participant
 NSTIMULI = 100
 NOBS = 300
@@ -49,6 +50,10 @@ HEAD_COLS = ['head rot x','head rot y','head rot z','head_dir_x','head_dir_y','h
 NCHANNELS = len(GAZE_COLS)+len(HEAD_COLS)
 
 # selection = {i:np.array(range(0,NSTIMULI)) for i in range(len(PART_LIST))}
+
+# for testing
+PART_LIST = PART_LIST[:3]
+print('Testing on participants,',PART_LIST)
 selection = {participant:np.array(range(0,NSTIMULI)) for participant in PART_LIST}
 for k in selection.keys():
     # shuffle each individually 
@@ -85,40 +90,41 @@ train = True
 # hard code. only combined makes sense
 net_num = 1
 # traject = str(sys.argv[7])
-number_descending_blocks = int(sys.argv[8])
-number_repeating_blocks = int(sys.argv[9])
-repeating_blockd_size = int(sys.argv[10])
+# number_descending_blocks = int(sys.argv[8])
+# number_repeating_blocks = int(sys.argv[9])
+# repeating_blockd_size = int(sys.argv[10])
 # traject_max_depth = int(sys.argv[11])
-traject_max_depth = 128
+# traject_max_depth = 128
 # traject_num_layers = int(sys.argv[12])
-traject_num_layers = 3
-first_depth = 32
+# traject_num_layers = 3
+# first_depth = 32
 # dataset_status = str(sys.argv[13])
 mine = MINE.MINE(train = True, 
                  batch = batch_size, 
                  lr = lr,
                  gamma = gamma, 
                  optimizer = optimizer,
-                 traject_max_depth = traject_max_depth, 
-                 traject_num_layers = traject_num_layers, 
+                #  traject_max_depth = traject_max_depth, 
+                #  traject_num_layers = traject_num_layers, 
                  traject_stride = [3,1],
                  traject_kernel = 5, 
                  traject_padding = 0,
                  traject_pooling = [1,2], 
-                 number_descending_blocks = number_descending_blocks, 
-                 number_repeating_blocks=number_repeating_blocks,  
-                 repeating_blockd_size = repeating_blockd_size,
+                #  number_descending_blocks = number_descending_blocks, 
+                #  number_repeating_blocks=number_repeating_blocks,  
+                #  repeating_blockd_size = repeating_blockd_size,
                 #  dataset_status = dataset_status,
                  traject_input_dim = [NCHANNELS,NOBS])
 
 print(mine.net)
 
 safety = 0
-print('Epochs: {}'.format(int(sys.argv[4])))
+# print('Epochs: {}'.format(int(sys.argv[4])))
 
 # CUDA for PyTorch
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
+# ? 
 torch.backends.cudnn.benchmark = True
 
 dataset = FullDriftDataset.FullDataset(ix_dict=train_selection)
@@ -127,6 +133,14 @@ params = {'batch_size': batch_size,
           'shuffle': False}
         #   'num_workers': 6}
 traj_generator = torch.utils.data.DataLoader(dataset, **params)
+
+val_dataset = FullDriftDataset.FullDataset(ix_dict=val_selection)
+params = {
+    'batch_size':batch_size,
+    'shuffle':False
+}
+val_generator = torch.utils.data.DataLoader(val_dataset, **params)
+
 
 # opening MINE.train() which calls MINE.epoch() which calls MINE.learn_mine()
 results = []
@@ -140,6 +154,8 @@ for epoch in range(epochs):
         traj_inp = trajectory.permute(0,2,1).float()
         joint_inp = joint.permute(0,3,1,2).float()
         marg_inp = marginal.permute(0,3,1,2).float()
+
+        traj_inp, joint_inp, marg_inp = traj_inp.to(device), joint_inp.to(device), marg_inp.to(device)
 
         # where is loss recorded, managed
         NIM, loss = mine.learn_mine((traj_inp,joint_inp,marg_inp))
@@ -162,6 +178,40 @@ for epoch in range(epochs):
         safety += 1
         mine.restart_network()
 
+# Validate 
+    for val_i, val_sample in enumerate(val_generator):
+        trajectory,joint,marginal = sample
+        traj_inp = trajectory.permute(0,2,1).float()
+        joint_inp = joint.permute(0,3,1,2).float()
+        marg_inp = marginal.permute(0,3,1,2).float()
+        
+        traj_inp, joint_inp, marg_inp = traj_inp.to(device), joint_inp.to(device), marg_inp.to(device)
+
+         # where is loss recorded, managed
+        NIM, loss = mine.learn_mine((traj_inp,joint_inp,marg_inp))
+        if torch.isnan(NIM):
+            ix = batch_size * i
+            # which samples 
+            print('NaN epoch {0}:: samples {1}'.format(epoch, dataset.ix_list[ix:ix+batch_size]))
+            continue
+        else:
+            epoch_results.append(NIM.detach())
+            epoch_losses.append(loss.detach())
+
+    results.append(np.mean(epoch_results))
+    losses.append(np.mean(epoch_losses))
+
+        # where is loss recorded, managed
+        # NIM, loss = mine.learn_mine((traj_inp,joint_inp,marg_inp))
+        # if torch.isnan(NIM):
+        #     ix = batch_size * i
+        #     # which samples 
+        #     print('NaN epoch {0}:: samples {1}'.format(epoch, dataset.ix_list[ix:ix+batch_size]))
+        #     continue
+        # else:
+        #     epoch_results.append(NIM.detach())
+        #     epoch_losses.append(loss.detach())
+
 # mine.train(epochs = epochs)
 # while len(mine.results) == 0:
 #     mine.restart_network()
@@ -173,9 +223,11 @@ for epoch in range(epochs):
 # results = pd.DataFrame(mine.results)
 results = pd.DataFrame(results)
 # nm = 'results_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}'.format(sys.argv[1],int(float(sys.argv[2])*100000),sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8],sys.argv[9],sys.argv[10],dataset_status)
-name = 'results'
+name = 'results_test'
 results.to_pickle(name)
 #results.to_csv('results_{0}_{1}_{2}_{3}_{4}.csv'.format(sys.argv[1],int(float(sys.argv[2])*10000),sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8]))
 torch.save(mine.net.state_dict, 'net_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}'.format(sys.argv[1],int(float(sys.argv[2])*100000),sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8],sys.argv[9],sys.argv[10],dataset_status))
 
 # test
+
+## random shuffling should get nothing
