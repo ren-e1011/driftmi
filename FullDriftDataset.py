@@ -8,7 +8,7 @@ from datetime import datetime
 # choice with/out replacement. shuffle in-place
 from random import shuffle, choice
 
-BASE_PATH = '/Volumes/Experiment Data/Sasha and Or/'
+BASE_PATH = '/Volumes/Experiment Data/VRDrift/'
 
 # list of participants - ignore hidden files/folders (.DS_Store)
 # part_set = set([_dir for _dir in os.listdir(BASE_PATH) if not _dir.startswith(".")])
@@ -50,7 +50,8 @@ def fillfirstna(resampled_df,orig_df):
 # linear interpolation
 def resample_and_interpolate(df,interp_cols, hz=FREQ):
     # 100 sample session ends at 5 minutes (3seconds * 100)/60
-    end = datetime(year=1970,month=1,day=1,minute=END_MINUTE,second=0)
+    # mod minute = END_MINUTE + 10 seconds for 100th stimulus which extends into the 6th minute (ie 101 stimulus at 5:02)
+    end = datetime(year=1970,month=1,day=1,minute=END_MINUTE, second= 10)
     interp_cols = interp_cols.copy()
     # returns empty dataframe indexed at frequency
     NaNresampled_df = df.set_index('timedelta_dt').resample('{hz}S'.format(hz=hz)).interpolate()

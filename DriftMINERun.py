@@ -7,8 +7,12 @@ import sys
 import os
 import logging
 from random import shuffle, choice
+import pickle
 
 import FullDriftDataset
+
+from datetime import datetime
+_datestr = datetime.now().strftime("%Y_%m_%d_%I_%M_%S_%p")
 # README.md
 # An example of a run:​
 
@@ -35,11 +39,12 @@ import FullDriftDataset
 # [13] - same/different minist/trajectory - to use the same image that the 
 #        trajectory ran on as the joint distribution. # Ignore? 
 
-BASE_PATH = '/Volumes/Experiment Data/Sasha and Or/'
+BASE_PATH = '/Volumes/Experiment Data/VRDrift/'
 part_set = set([_dir for _dir in os.listdir(BASE_PATH) if not _dir.startswith(".")])
 exclude_set = set(['DL','OL','SM'])
 PART_LIST = list(part_set - exclude_set)
 PART_LIST = [p for p in PART_LIST if 'try' not in p.lower()]
+
 
 # 300 observations per participant
 NSTIMULI = 100
@@ -47,11 +52,11 @@ NOBS = 300
 
 GAZE_COLS = ['norm_pos_x','norm_pos_y']
 HEAD_COLS = ['head rot x','head rot y','head rot z','head_dir_x','head_dir_y','head_dir_z','head_right_x','head_right_y','head_right_z','head_up_x','head_up_y','head_up_z']
-NCHANNELS = len(GAZE_COLS)+len(HEAD_COLS)
+NCHANNELS = len(GAZE_COLS) + len(HEAD_COLS)
 
 # selection = {i:np.array(range(0,NSTIMULI)) for i in range(len(PART_LIST))}
 
-# for testing
+# for testing  - rm for train
 PART_LIST = PART_LIST[:3]
 print('Testing on participants,',PART_LIST)
 selection = {participant:np.array(range(0,NSTIMULI)) for participant in PART_LIST}
@@ -71,22 +76,45 @@ val_selection = {k:selection[k][cut1:cut2] for k in selection.keys()}
 # 30 random observations of each participant
 test_selection = {k:selection[k][cut2:] for k in selection.keys()}
 
+# save selections for future runs
+# with open('train_selection.pickle', 'wb') as handle:
+#     pickle.dump(train_selection, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+# with open('val_selection.pickle', 'wb') as handle:
+#     pickle.dump(val_selection, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+# with open('test_selection.pickle','wb') as handle:
+#     pickle.dump(test_selection, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+with open(r'train_selection.pickle', 'rb') as handle:
+    train_selection = pickle.load(handle)
+
+with open(r'val_selection.pickle', 'rb') as handle:
+    val_selection = pickle.load(handle)
+
+with open(r'test_selection.pickle','rb') as handle:
+    test_selection = pickle.load(handle)
+
+
 # TODO mod input params 
 gamma = 0
 # optimizer = int(sys.argv[1])
 optimizer = 2 # Adam
 # lr = float(sys.argv[2])
-lr = 0.0003 
+# lr = 0.0003 
+lr = 0.00001
 # batch_size = int(sys.argv[3])
+# arbitrary 
+# on local running out of memory if bs is too large
 batch_size = 16
 # epochs = int(sys.argv[4])
-epochs = 2 # for testing
+epochs = 60 # for testing
 # if int(sys.argv[5]) == 1:
 #     train = True
 # else:
 #     train = False
 # TODO mod test (train=False) for net
-train = True
+# train = True
 # hard code. only combined makes sense
 net_num = 1
 # traject = str(sys.argv[7])
@@ -121,11 +149,6 @@ print(mine.net)
 safety = 0
 # print('Epochs: {}'.format(int(sys.argv[4])))
 
-# CUDA for PyTorch
-use_cuda = torch.cuda.is_available()
-device = torch.device("cuda:0" if use_cuda else "cpu")
-# ? 
-torch.backends.cudnn.benchmark = True
 
 dataset = FullDriftDataset.FullDataset(ix_dict=train_selection)
 # num_workers maybe comment out
@@ -135,31 +158,46 @@ params = {'batch_size': batch_size,
 traj_generator = torch.utils.data.DataLoader(dataset, **params)
 
 val_dataset = FullDriftDataset.FullDataset(ix_dict=val_selection)
-params = {
-    'batch_size':batch_size,
-    'shuffle':False
-}
 val_generator = torch.utils.data.DataLoader(val_dataset, **params)
 
+# CUDA for PyTorch
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda:3" if use_cuda else "cpu")
+print('using device',device)
+# ? 
+torch.backends.cudnn.benchmark = True
 
 # opening MINE.train() which calls MINE.epoch() which calls MINE.learn_mine()
-results = []
-losses = []
+train_results = []
+train_losses = []
+val_results = []
+val_losses = []
+batchwise_res = {"train":{i:[] for i in range(epochs)},"validate":{i:[] for i in range(epochs)}}
+batchwise_loss = {"train":{i:[] for i in range(epochs)},"validate":{i:[] for i in range(epochs)}}
+model_state = None
+val_temp = 0
+loss_temp = np.inf 
+
 for epoch in range(epochs):
 # Train
+    print('Training epoch',epoch)
+    print('========================')
     epoch_results = []
     epoch_losses = []
     for i, sample in enumerate(traj_generator):
         trajectory,joint,marginal = sample
+        print('Sample (pre-mut)',trajectory.shape,joint.shape,marginal.shape)
         traj_inp = trajectory.permute(0,2,1).float()
         joint_inp = joint.permute(0,3,1,2).float()
         marg_inp = marginal.permute(0,3,1,2).float()
-
+        print('Sample post-mut',traj_inp.shape,joint_inp.shape,marg_inp.shape)
         traj_inp, joint_inp, marg_inp = traj_inp.to(device), joint_inp.to(device), marg_inp.to(device)
 
         # where is loss recorded, managed
         NIM, loss = mine.learn_mine((traj_inp,joint_inp,marg_inp))
-        if torch.isnan(NIM):
+        print('MI',NIM.detach())
+        print('loss',loss.detach())
+        if torch.isnan(NIM.detach()):
             ix = batch_size * i
             # which samples 
             print('NaN epoch {0}:: samples {1}'.format(epoch, dataset.ix_list[ix:ix+batch_size]))
@@ -167,66 +205,79 @@ for epoch in range(epochs):
         else:
             epoch_results.append(NIM.detach())
             epoch_losses.append(loss.detach())
-
-    results.append(np.mean(epoch_results))
-    losses.append(np.mean(epoch_losses))
+    batchwise_res['train'][epoch] = epoch_results
+    batchwise_loss['train'][epoch] = epoch_losses
+    train_results.append(np.mean(epoch_results))
+    train_losses.append(np.mean(epoch_losses))
     # if nan across all iterations - in what cases?
-    if len(results) == 0:
+    if len(train_results) == 0:
         if safety > 5: 
             print('Nans for 5 epochs. Halting Training')
             break
         safety += 1
         mine.restart_network()
 
+    val_epoch_results = []
+    val_epoch_losses = []
 # Validate 
-    for val_i, val_sample in enumerate(val_generator):
-        trajectory,joint,marginal = sample
-        traj_inp = trajectory.permute(0,2,1).float()
-        joint_inp = joint.permute(0,3,1,2).float()
-        marg_inp = marginal.permute(0,3,1,2).float()
-        
-        traj_inp, joint_inp, marg_inp = traj_inp.to(device), joint_inp.to(device), marg_inp.to(device)
+# versus mine.net.eval() ie the statistical_estimator which inherits from nn
+    with torch.no_grad():
+        print('-----------------------')
+        print('Validation epoch',epoch)
+        print('========================')
+        for val_i, val_sample in enumerate(val_generator):
+            trajectory,joint,marginal = sample
+            traj_inp = trajectory.permute(0,2,1).float()
+            joint_inp = joint.permute(0,3,1,2).float()
+            marg_inp = marginal.permute(0,3,1,2).float()
+            
+            traj_inp, joint_inp, marg_inp = traj_inp.to(device), joint_inp.to(device), marg_inp.to(device)
 
-         # where is loss recorded, managed
-        NIM, loss = mine.learn_mine((traj_inp,joint_inp,marg_inp))
-        if torch.isnan(NIM):
-            ix = batch_size * i
-            # which samples 
-            print('NaN epoch {0}:: samples {1}'.format(epoch, dataset.ix_list[ix:ix+batch_size]))
-            continue
-        else:
-            epoch_results.append(NIM.detach())
-            epoch_losses.append(loss.detach())
+            # where is loss recorded, managed
+            val_NIM, val_loss = mine.validate_mine((traj_inp,joint_inp,marg_inp))
+            print('val_MI',val_NIM.detach())
+            print('val_loss',val_loss.detach()) 
+            if torch.isnan(val_NIM):
+                ix = batch_size * i
+                # which samples 
+                print('NaN epoch {0}:: samples {1}'.format(epoch, dataset.ix_list[ix:ix+batch_size]))
+                continue
+            else:
+                val_epoch_results.append(val_NIM.detach())
+                val_epoch_losses.append(val_loss.detach())
 
-    results.append(np.mean(epoch_results))
-    losses.append(np.mean(epoch_losses))
+        batchwise_res['validate'][epoch] = epoch_results
+        batchwise_loss['validate'][epoch] = epoch_losses
+        val_results.append(np.mean(val_epoch_results))
+        val_losses.append(np.mean(val_epoch_losses))
+        if (np.mean(val_epoch_results) >= val_temp) & (np.mean(val_epoch_losses) <= loss_temp):
+            val_temp = np.mean(val_epoch_results)
+            loss_temp = np.mean(val_epoch_losses)
+            # torch.save(mine.net.state_dict(), 'net_epch_{1}_dt_{0}'.format(_datestr,epoch))
+            # print('model saved')
 
-        # where is loss recorded, managed
-        # NIM, loss = mine.learn_mine((traj_inp,joint_inp,marg_inp))
-        # if torch.isnan(NIM):
-        #     ix = batch_size * i
-        #     # which samples 
-        #     print('NaN epoch {0}:: samples {1}'.format(epoch, dataset.ix_list[ix:ix+batch_size]))
-        #     continue
-        # else:
-        #     epoch_results.append(NIM.detach())
-        #     epoch_losses.append(loss.detach())
 
-# mine.train(epochs = epochs)
-# while len(mine.results) == 0:
-#     mine.restart_network()
-#     check_trial = mine.train(epochs = epochs)
-#     safty+=1
-#     if safty>5:
-#         break
-# safty = 0
-# results = pd.DataFrame(mine.results)
-results = pd.DataFrame(results)
+train_results = pd.DataFrame(train_results)
+val_results = pd.DataFrame(val_results)
 # nm = 'results_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}'.format(sys.argv[1],int(float(sys.argv[2])*100000),sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8],sys.argv[9],sys.argv[10],dataset_status)
-name = 'results_test'
-results.to_pickle(name)
-#results.to_csv('results_{0}_{1}_{2}_{3}_{4}.csv'.format(sys.argv[1],int(float(sys.argv[2])*10000),sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8]))
-torch.save(mine.net.state_dict, 'net_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}'.format(sys.argv[1],int(float(sys.argv[2])*100000),sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8],sys.argv[9],sys.argv[10],dataset_status))
+res_name = 'results_train'
+val_name = 'results_val'
+train_results.to_pickle(res_name.format(_datestr))
+val_results.to_pickle(val_name.format(_datestr))
+
+loss_name = 'losses_train'
+val_name = 'losses_val'
+train_losses = pd.DataFrame(train_losses)
+val_losses = pd.DataFrame(val_losses)
+
+train_losses.to_pickle(loss_name.format(_datestr))
+val_losses.to_pickle(val_name.format(_datestr))
+
+
+
+
+
+
 
 # test
 

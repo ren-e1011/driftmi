@@ -98,11 +98,11 @@ class MINE():
         print('Learning rate = {}'.format(self.lr))
         print('Batch size = {}'.format(self.batch_size))
         #print('Gamma of lr decay = {}'.format(self.gamma))
-        print('Using Net {}'.format(self.net_num))
-        if self.net_num == 3:
-            print('Number of Descending Blocks is {}'.format(self.number_descending_blocks))
-            print('Number of times to repeat a block = {}'.format(self.number_repeating_blocks))
-            print('The fully connected layer to repeat - {}'.format(self.repeating_blockd_size))
+        # print('Using Net {}'.format(self.net_num))
+        # if self.net_num == 3:
+        #     print('Number of Descending Blocks is {}'.format(self.number_descending_blocks))
+        #     print('Number of times to repeat a block = {}'.format(self.number_repeating_blocks))
+        #     print('The fully connected layer to repeat - {}'.format(self.repeating_blockd_size))
         
     def restart_network(self):
         self.net = networks.statistical_estimator(traject_max_depth = self.traject_max_depth,
@@ -127,25 +127,59 @@ class MINE():
        
             
     def mutual_information(self,joint1, joint2, marginal):
-        if self.traject == 'traject':
-            obj = torch.cat((joint1,joint2),1)
-            T = self.net(obj)
-            obj2 = torch.cat((joint1, marginal),1)
-            eT = torch.exp(self.net(obj2))
-        else:
-            T = self.net(joint1, joint2)
-            eT = torch.exp(self.net(joint1, marginal))
+        # TODO Confirm non "traject"
+        # if self.traject == 'traject':
+        #     obj = torch.cat((joint1,joint2),1)
+        #     T = self.net(obj)
+        #     obj2 = torch.cat((joint1, marginal),1)
+        #     eT = torch.exp(self.net(obj2))
+        # else:
+        T = self.net(joint1, joint2)
+        eT = torch.exp(self.net(joint1, marginal))
         NIM = torch.mean(T) - torch.log(torch.mean(eT)) #The neural information measure by the Donskar-Varadhan representation
         return NIM, T, eT
 # MOD
-    # def val_mine(self, batch):
+    def validate_mine(self, batch,ma_rate=0.01):
+        # batch is a tuple of (joint1, joint2, marginal (from the dataset of joint 2))
+        joint1 = torch.autograd.Variable(batch[0])
+        joint2 = torch.autograd.Variable(batch[1])
+        marginal = torch.autograd.Variable(batch[2]) #the uneven parts of the dataset are the labels 
+        if torch.cuda.is_available():
+            joint1 = joint1.to('cuda', non_blocking=True)
+            joint2 = joint2.to('cuda', non_blocking=True)
+            marginal = marginal.to('cuda', non_blocking=True)
+            self.net = self.net.cuda()
+        #joint = torch.autograd.Variable(torch.FloatTensor(joint))
+        #marginal = torch.autograd.Variable(torch.FloatTensor(marginal))
+        
+        NIM , T, eT = self.mutual_information(joint1, joint2, marginal)
+        
+        #Using exponantial moving average to correct bias 
+        ma_eT = (1-ma_rate)*eT + (ma_rate)*torch.mean(eT) 
+        # unbiasing 
+        loss = -(torch.mean(T) - (1/ma_eT.mean()).detach()*torch.mean(eT))
+        # use biased estimator
+        # loss = - mi_lb
+        
+        # self.mine_net_optim.zero_grad()
+        # autograd.backward(loss)
+        # self.mine_net_optim.step()
+        #self.scheduler.step()
+        #self.scheduler2.step(NIM)
+        # if cuda, why put it on the cpu?
+        if torch.cuda.is_available():
+            NIM = NIM.cpu() 
+            loss = loss.cpu()
+        return NIM, loss
 
 
     def learn_mine(self,batch, ma_rate=0.01):
         # batch is a tuple of (joint1, joint2, marginal (from the dataset of joint 2))
         joint1 = torch.autograd.Variable(batch[0])
-        joint2 = torch.autograd.Variable(batch[2])
-        marginal = torch.autograd.Variable(batch[4]) #the uneven parts of the dataset are the labels 
+        # mod from [2] to [1]
+        joint2 = torch.autograd.Variable(batch[1])
+        # mod from [4] to [2]
+        marginal = torch.autograd.Variable(batch[2]) #the uneven parts of the dataset are the labels 
         if torch.cuda.is_available():
             joint1 = joint1.to('cuda', non_blocking=True)
             joint2 = joint2.to('cuda', non_blocking=True)
